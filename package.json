@@ -1,0 +1,17 @@
+{
+  "name": "polymarket-scanner",
+  "version": "3.0.0",
+  "description": "Polymarket Pro — Scanner, Backtest & Analytics Suite",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@polymarket/clob-client-v2": "^1.0.3",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.16.0",
+    "viem": "^2.48.8"
+  }
+}
