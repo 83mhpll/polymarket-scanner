@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Polymarket Pro | Scanner & Backtest Suite</title>
+    <style>
+      :root {
+        --bg: #09090b;
+        --bg-card: rgba(24, 24, 27, 0.6);
+        --text: #f8fafc;
+        --muted: #a1a1aa;
+        --accent: #a855f7;
+        --accent-glow: rgba(168, 85, 247, 0.4);
+        --border: rgba(255, 255, 255, 0.1);
+        --green: #4ade80;
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, system-ui, sans-serif;
+        background-color: var(--bg);
+        color: var(--text);
+      }
+      header {
+        padding: 24px 40px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border);
+        backdrop-filter: blur(10px);
+      }
+      .hero {
+        text-align: center;
+        padding: 100px 20px;
+      }
+      h1 {
+        font-size: 48px;
+        margin-bottom: 16px;
+        background: linear-gradient(to right, #a855f7, #60a5fa);
+        -webkit-background-clip: text;
+        color: transparent;
+      }
+      p {
+        font-size: 18px;
+        color: var(--muted);
+        max-width: 600px;
+        margin: 0 auto 40px;
+        line-height: 1.6;
+      }
+      .btn {
+        padding: 14px 28px;
+        border-radius: 8px;
+        border: none;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: white;
+        box-shadow: 0 0 20px var(--accent-glow);
+      }
+      .pricing {
+        display: flex;
+        justify-content: center;
+        gap: 24px;
+        padding: 60px 20px;
+        flex-wrap: wrap;
+      }
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 40px;
+        width: 300px;
+        backdrop-filter: blur(20px);
+        text-align: left;
+      }
+      .card h3 {
+        font-size: 24px;
+        margin-top: 0;
+      }
+      .card .price {
+        font-size: 36px;
+        font-weight: bold;
+        margin: 20px 0;
+      }
+      .card ul {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 32px;
+        color: var(--muted);
+      }
+      .card ul li {
+        margin-bottom: 12px;
+      }
+      .card ul li::before {
+        content: "✅ ";
+        color: var(--green);
+      }
+      footer {
+        text-align: center;
+        padding: 40px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 14px;
+      }
+      footer a {
+        color: var(--accent);
+        text-decoration: none;
+        margin: 0 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div style="font-size: 20px; font-weight: bold">🎯 Polymarket Pro</div>
+      <a href="#pricing" class="btn btn-primary" style="padding: 10px 20px"
+        >Get Started</a
+      >
+    </header>
+
+    <section class="hero">
+      <h1>Trade Smarter on Polymarket</h1>
+      <p>
+        The ultimate research dashboard for discovering 95%+ win-rate events.
+        Filter markets, simulate trades, and execute algorithms automatically.
+      </p>
+      <a href="#pricing" class="btn btn-primary">Start Scanning Now</a>
+    </section>
+
+    <section id="pricing" class="pricing">
+      <div class="card">
+        <h3>FREE</h3>
+        <div class="price">
+          $0<span style="font-size: 16px; color: var(--muted)">/mo</span>
+        </div>
+        <ul>
+          <li>5 Scans per day</li>
+          <li>Basic Market Data</li>
+          <li>No Backtesting</li>
+        </ul>
+        <button
+          class="btn"
+          style="width: 100%; background: var(--border); color: white"
+        >
+          Current Plan
+        </button>
+      </div>
+      <div
+        class="card"
+        style="
+          border-color: var(--accent);
+          box-shadow: 0 0 30px rgba(168, 85, 247, 0.2);
+        "
+      >
+        <h3 style="color: var(--accent)">PRO</h3>
+        <div class="price">
+          $29<span style="font-size: 16px; color: var(--muted)">/mo</span>
+        </div>
+        <ul>
+          <li>Unlimited Scans</li>
+          <li>Paper Trading & Backtesting</li>
+          <li>Export CSV Data</li>
+          <li>Fact-Check Integration</li>
+        </ul>
+        <button class="btn btn-primary" style="width: 100%">
+          Upgrade to PRO
+        </button>
+      </div>
+      <div class="card">
+        <h3>ELITE</h3>
+        <div class="price">
+          $79<span style="font-size: 16px; color: var(--muted)">/mo</span>
+        </div>
+        <ul>
+          <li>Everything in PRO</li>
+          <li>Live Builder API Trading</li>
+          <li>Automated Strategy Execution</li>
+          <li>Priority Support</li>
+        </ul>
+        <button
+          class="btn"
+          style="width: 100%; background: white; color: black"
+        >
+          Go ELITE
+        </button>
+      </div>
+    </section>
+
+    <footer>
+      <div>© 2026 Polymarket Pro. Not financial advice.</div>
+      <div style="margin-top: 16px">
+        <a href="legal.md">Terms of Service</a> |
+        <a href="legal.md">Privacy Policy</a> |
+        <a href="legal.md">Risk Disclosure</a>
+      </div>
+    </footer>
+  </body>
+</html>

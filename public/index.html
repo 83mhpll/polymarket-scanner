@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Polymarket Pro Scanner — High Win Rate Opportunities</title>
+<meta name="description" content="Discover 90–99% win rate prediction markets on Polymarket. Scanner, Backtesting, Paper Trading, and Live Trading in one dashboard.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=VT323&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=VT323&display=swap" rel="stylesheet"></noscript>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#f8fafc;
+    --surface:#ffffff;
+    --card:#ffffff;
+    --border:#e2e8f0;
+    --accent:#10b981;
+    --accent-glow:rgba(16, 185, 129, 0.2);
+    --text:#0f172a;
+    --muted:#64748b;
+    --white:#ffffff;
+    --green:#10b981;
+    --red:#ef4444;
+  }
+  body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+  
+  /* Hero Glow */
+  body::before {
+    content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 150vw; height: 800px; 
+    background: radial-gradient(ellipse at top, rgba(16, 185, 129, 0.05), transparent 70%);
+    pointer-events: none; z-index: -1;
+  }
+
+  /* Header */
+  header{
+    padding:30px 5%; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .logo{display:flex;align-items:center;gap:16px}
+  .logo-icon{
+    width:48px;height:48px;background:linear-gradient(135deg,#0ea5e9,#10b981);
+    border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;
+    box-shadow: 0 4px 15px rgba(16,185,129,0.2);
+  }
+  .logo h1{font-size:26px;font-weight:700;letter-spacing:-0.5px;color:var(--text)}
+  .logo span{font-size:12px;color:var(--muted);font-weight:600;display:block;margin-top:2px}
+  
+  .header-right{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .badge{
+    background:#f1f5f9;border:1px solid var(--border);border-radius:30px;
+    padding:8px 16px;font-size:12px;color:var(--muted);font-weight:500;
+  }
+  .badge b{color:var(--text)}
+  
+  .btn { padding: 10px 20px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .2s; }
+  .btn-primary { background: var(--text); color: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: #f1f5f9; }
+
+  #refresh-btn { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s; }
+  #refresh-btn:hover { background: #f1f5f9; }
+  #refresh-btn:disabled{opacity:.5;cursor:not-allowed}
+
+  /* Stats Container */
+  .stats-container {
+    margin: 30px 5%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 30px; display: flex; flex-wrap: wrap; gap: 40px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+  }
+  .stats-container .intro { flex: 1; min-width: 280px; }
+  .stats-container .intro h2 { font-size: 22px; font-weight: 400; color: var(--muted); line-height: 1.5; }
+  .stats-container .intro h2 strong { color: var(--text); font-weight: 600; }
+  
+  .stats-bar{display:flex;gap:40px;flex:2;flex-wrap:wrap;justify-content:space-around}
+  .stat{display:flex;flex-direction:column;align-items:flex-start}
+  .stat-val{font-family:'VT323',monospace;font-size:48px;color:var(--text);line-height:1;letter-spacing:1px}
+  .stat-label{font-size:11px;color:var(--muted);margin-top:8px;text-transform:uppercase;letter-spacing:1px;position:relative;padding-left:12px;font-weight:600}
+  .stat-label::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:6px;height:6px;background:var(--accent);border-radius:2px}
+
+  /* Filters */
+  .filters-wrap { margin: 0 5% 20px; display: flex; flex-direction: column; gap: 12px; }
+  .filters{display:flex;gap:8px;flex-wrap:wrap}
+  .filter-btn{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;transition:all .2s}
+  .filter-btn.active,.filter-btn:hover{background:#f1f5f9;border-color:#cbd5e1;color:var(--text);}
+  
+  /* Card Grid (Option 1 Design) */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 24px; padding: 0 5% 60px; }
+  
+  .card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 24px;
+    transition: all 0.2s;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+  }
+  .card:hover {
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+    border-color: #cbd5e1;
+  }
+  
+  .card-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.4;
+    margin-bottom: 24px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .card-col { display: flex; flex-direction: column; gap: 4px;}
+  .card-label { font-size: 12px; color: #64748b; font-weight: 500; }
+  
+  .token-info { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: #0f172a; }
+  .token-icon { width: 20px; height: 20px; background: #0f172a; border-radius: 50%; color: #fff; display: flex; justify-content: center; align-items: center; font-size: 10px; }
+  .token-change { color: #10b981; font-size: 12px; font-weight: 600; }
+  
+  .prob-info { font-size: 13px; font-weight: 600; color: #0f172a; }
+  .prob-yes { color: #10b981; }
+  .prob-no { color: #64748b; font-weight: 500;}
+  
+  .progress-wrap { margin: 16px 0 24px 0; }
+  .progress-top { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .progress-top .l { color: #10b981; }
+  .progress-top .r { color: #0f172a; }
+  .progress-track { height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #10b981; border-radius: 3px; }
+  
+  .trend-label { font-size: 12px; color: #64748b; font-weight: 500; margin-bottom: 8px; }
+  .trend-chart { height: 40px; width: 100%; margin-bottom: 24px; position: relative; }
+  .trend-chart svg { width: 100%; height: 100%; overflow: visible; }
+  .trend-chart path { fill: none; stroke: #10b981; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .trend-chart .fill-area { fill: rgba(16,185,129,0.1); stroke: none; }
+  
+  .card-actions { display: flex; gap: 12px; }
+  .btn-bet { flex: 1; padding: 12px 0; border-radius: 8px; font-size: 14px; font-weight: 600; text-align: center; cursor: pointer; border: none; transition: 0.2s; display:flex; justify-content:center; align-items:center; gap:6px; }
+  .btn-bet.yes { background: #10b981; color: #fff; }
+  .btn-bet.yes:hover { background: #059669; }
+  .btn-bet.no { background: #1d4ed8; color: #fff; }
+  .btn-bet.no:hover { background: #1e3a8a; }
+
+  /* Loading / Error */
+  .loading{text-align:center;padding:100px 20px;color:var(--muted)}
+  .spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+  .error-box{background:#fee2e2;border:1px solid #fca5a5;border-radius:12px;padding:24px;text-align:center;color:#b91c1c;margin:20px 5%}
+
+  #countdown{font-size:13px;color:var(--muted);font-family:'VT323',monospace;letter-spacing:1px}
+
+  /* Modal */
+  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); backdrop-filter:blur(5px); display: none; align-items: center; justify-content: center; z-index: 1000; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 32px; width: 90%; max-width: 440px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
+  .modal h2 { margin-bottom: 24px; font-size: 24px; color: var(--white); font-weight:600; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 8px; font-weight:500; }
+  .form-group input { width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-family: inherit; font-size: 15px; outline: none; transition: border-color .3s; }
+  .form-group input:focus { border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
+  .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px; }
+
+  /* Backtest Log Modal */
+  .bt-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; text-align: left; color: var(--muted); }
+  .bt-table th, .bt-table td { padding: 12px; border-bottom: 1px solid var(--border); }
+  .bt-table th { font-weight: 600; color: var(--text); }
+  .bt-win { color: var(--green); font-weight: bold; }
+  .bt-loss { color: var(--red); font-weight: bold; }
+  .bt-open { color: #f59e0b; font-weight: bold; }
+
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);margin-top:20px}
+
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  @media(max-width:768px){
+    header{padding:20px;}
+    .stats-container{margin:20px;padding:24px;gap:30px;}
+    .stat-val{font-size:48px;}
+    .grid{grid-template-columns:1fr;padding:0 20px 40px}
+    .filters-wrap{margin:0 20px 20px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-icon">🎯</div>
+    <div>
+      <h1>Polymarket Pro</h1>
+      <span>Scanner | Backtest | Trade</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="badge">Update: <b id="last-update">—</b></div>
+    <div id="countdown" style="margin-right:4px;"></div>
+    <button id="alert-btn" onclick="openAlerts()" class="btn-config" style="background:rgba(251,191,36,0.1);border-color:rgba(251,191,36,0.3);color:#fbbf24;position:relative;" title="High-conviction alerts">
+      🔔 Alerts <span id="alert-count" style="display:none;background:#ef4444;color:#fff;font-size:10px;border-radius:50%;padding:2px 6px;margin-left:4px;">0</span>
+    </button>
+    <button onclick="openWatchlist()" class="btn-config" style="background:rgba(96,165,250,0.1);border-color:rgba(96,165,250,0.3);color:#60a5fa;">⭐ Watchlist</button>
+    <button onclick="openBacktest()" class="btn-config" style="background:rgba(168,85,247,0.1);border-color:rgba(168,85,247,0.3);color:#c084fc;">📊 Portfolio</button>
+    <button onclick="openConfig()" class="btn-config">⚙️ Config</button>
+    <button id="refresh-btn" onclick="loadData(true)" style="display:flex;align-items:center;gap:6px;">🔄 Refresh</button>
+  </div>
+</header>
+
+<div class="stats-container">
+  <div class="intro">
+    <h2>We're a highly accurate <strong>Polymarket Scanner</strong> passionate about discovering high win-rate opportunities for you.</h2>
+  </div>
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat"><div class="stat-val" id="s-total">—</div><div class="stat-label">Markets Scanned</div></div>
+    <div class="stat"><div class="stat-val" id="s-all">—</div><div class="stat-label">Total Opps</div></div>
+    <div class="stat"><div class="stat-val" id="s-24h">—</div><div class="stat-label">24hr Markets</div></div>
+    <div class="stat"><div class="stat-val" id="s-7d">—</div><div class="stat-label">7-Day Markets</div></div>
+  </div>
+</div>
+
+<style>
+  #search-input:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 2px rgba(255,106,0,0.2); }
+</style>
+<div class="search-wrap" style="margin: 0 5% 20px;">
+  <input type="text" id="search-input" placeholder="🔍 Search markets... (e.g. Bitcoin, Election, Trump)" style="width: 100%; padding: 14px 18px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 16px; outline: none; transition: all 0.2s;" oninput="applyFilters()">
+</div>
+
+<div class="filters-wrap">
+  <div class="filters time-filters">
+    <button class="filter-btn" onclick="setTimeFilter(-1,this)">🎯 Ending Today</button>
+    <button class="filter-btn" onclick="setTimeFilter(0,this)">⏳ 10 Mins</button>
+    <button class="filter-btn" onclick="setTimeFilter(1,this)">⏳ 30 Mins</button>
+    <button class="filter-btn" onclick="setTimeFilter(2,this)">⏳ 1 Hr</button>
+    <button class="filter-btn" onclick="setTimeFilter(3,this)">⏳ 5 Hr</button>
+    <button class="filter-btn" onclick="setTimeFilter(4,this)">⏳ 12 Hr</button>
+    <button class="filter-btn active" onclick="setTimeFilter(5,this)">📅 24 Hr</button>
+    <button class="filter-btn" onclick="setTimeFilter(6,this)">📅 2 Day</button>
+    <button class="filter-btn" onclick="setTimeFilter(7,this)">📅 3 Day</button>
+    <button class="filter-btn" onclick="setTimeFilter(8,this)">📅 7 Day</button>
+  </div>
+  <div class="filters cat-filters">
+    <button class="filter-btn active" onclick="setCatFilter('All',this)">🏷️ All</button>
+    <button class="filter-btn" onclick="setCatFilter('Crypto',this)">₿ Crypto</button>
+    <button class="filter-btn" onclick="setCatFilter('Sports',this)">⚽ Sports</button>
+    <button class="filter-btn" onclick="setCatFilter('Politics',this)">🏛️ Politics</button>
+    <button class="filter-btn" onclick="setCatFilter('Weather',this)">🌤️ Weather</button>
+    <button class="filter-btn" onclick="setCatFilter('Twitter',this)">🐦 Twitter / Tweet</button>
+    <button class="filter-btn" onclick="setCatFilter('Other',this)">📌 Other</button>
+  </div>
+  <div class="filters sort-filters" style="margin-top: 10px;">
+    <span style="color:var(--muted);font-size:14px;margin-right:10px;">Sort by:</span>
+    <button class="filter-btn active" onclick="setSort(0,this)">⭐ Highest Score</button>
+    <button class="filter-btn" onclick="setSort(1,this)">⏳ Ending Soonest</button>
+  </div>
+</div>
+
+<div class="grid" id="grid">
+  <div class="loading" style="grid-column:1/-1" id="initial-loading">
+    <div class="spinner"></div>
+    <p id="loading-text">กำลังเชื่อมต่อ Polymarket...</p>
+    <p style="font-size:12px;margin-top:6px" id="loading-sub">เริ่มสแกนตลาดในพื้นหลัง ใช้เวลา 10-30 วินาที</p>
+    <div id="loading-bar-wrap" style="width:240px;height:4px;background:var(--border);border-radius:2px;margin:16px auto 0;overflow:hidden;">
+      <div id="loading-bar" style="height:100%;width:5%;background:var(--accent);border-radius:2px;transition:width 0.5s;"></div>
+    </div>
+  </div>
+</div>
+
+<footer>Polymarket Scanner v2.0 — Powered by Gamma API | Not Financial Advice</footer>
+
+<!-- Config Modal -->
+<div class="modal-overlay" id="config-modal">
+  <div class="modal">
+    <h2>⚙️ Scanner Configuration</h2>
+    <div class="form-group">
+      <label>Win Probabilityขั้นต่ำ (MIN_PRICE) e.g. 0.95</label>
+      <input type="number" step="0.01" id="cfg-min-price">
+    </div>
+    <div class="form-group">
+      <label>Win Probabilityสูงสุด (MAX_PRICE) e.g. 0.99</label>
+      <input type="number" step="0.01" id="cfg-max-price">
+    </div>
+    <div class="form-group">
+      <label>Liquidityขั้นต่ำ (MIN_LIQUIDITY)</label>
+      <input type="number" id="cfg-min-liq">
+    </div>
+    <div class="form-group">
+      <label>Min 24h Volume (MIN_VOL24HR)</label>
+      <input type="number" id="cfg-min-vol">
+    </div>
+    <div class="form-group">
+      <label>Spread สูงสุด (MAX_SPREAD) e.g. 0.04</label>
+      <input type="number" step="0.01" id="cfg-max-spread">
+    </div>
+    <hr style="border:0; border-top:1px solid var(--border); margin: 24px 0;">
+    <h3 style="color:var(--white); margin-bottom:16px; font-size:16px;">🔐 API Trading Credentials (Optional)</h3>
+    <div class="form-group">
+      <label>Builder Code (bytes32)</label>
+      <input type="text" id="cfg-builder-code" placeholder="0x0000...">
+    </div>
+    <div class="form-group">
+      <label>API Key</label>
+      <input type="password" id="cfg-api-key" placeholder="Polymarket API Key">
+    </div>
+    <div class="form-group">
+      <label>API Secret</label>
+      <input type="password" id="cfg-api-secret" placeholder="Polymarket API Secret">
+    </div>
+    <div class="form-group">
+      <label>API Passphrase</label>
+      <input type="password" id="cfg-api-pass" placeholder="Polymarket API Passphrase">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeConfig()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="saveConfig()">Save & Rescan</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allData = null;
+let timeIdx = 5;
+let currentCat = 'All';
+let countdownInterval = null;
+let nextRefresh = 0;
+
+// 9 time windows: 10m, 30m, 1h, 5h, 12h, 24h, 2d, 3d, 7d
+const WINS=[10/60, 30/60, 1, 5, 12, 24, 48, 72, 168];
+
+function usd(n){
+  if(!n||isNaN(n))return'$0';
+  if(n>=1e6)return`$${(n/1e6).toFixed(2)}M`;
+  if(n>=1e3)return`$${(n/1e3).toFixed(1)}K`;
+  return`$${Number(n).toFixed(0)}`;
+}
+function timeLeft(iso){
+  const ms=new Date(iso)-new Date();
+  if(ms<=0)return'Resolved';
+  const d=Math.floor(ms/86400000);
+  const h=Math.floor((ms%86400000)/3600000);
+  const m=Math.floor((ms%3600000)/60000);
+  const s=Math.floor((ms%60000)/1000);
+  
+  if(d>0) return `${d}d ${h}h ${m}m`;
+  if(h>0) return `${h}h ${m}m ${s}s`;
+  return `${m}m ${s}s`;
+}
+
+function fmt(iso){
+  return new Date(iso).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+function scoreClass(s){return s>=75?'score-high':s>=60?'score-mid':'score-low';}
+function rankBadge(i){return i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span style="font-size:13px;color:var(--muted)">${i+1}.</span>`;}
+
+let currentOpps = [];
+
+function createCardHTML(o, i, isAlert = false) {
+  const pYes = (o.price * 100).toFixed(0);
+  const seed = o.question.length % 3;
+  const waves = [
+    "M0,30 Q20,10 40,30 T80,30 T120,20 T160,35 T200,20 T240,30 T280,15 T320,25 T360,10",
+    "M0,20 Q20,40 40,20 T80,30 T120,15 T160,30 T200,10 T240,25 T280,20 T320,35 T360,20",
+    "M0,35 Q20,15 40,30 T80,20 T120,40 T160,20 T200,35 T240,15 T280,30 T320,10 T360,25"
+  ];
+  const pathD = waves[seed];
+  const iconLetter = o.category ? o.category.charAt(0).toUpperCase() : 'P';
+  const tLeft = timeLeft(o.tradingEnd);
+  
+  const ms = new Date(o.tradingEnd) - new Date();
+  const hLeft = ms / 3600000;
+  const urgColor = hLeft<=1?'var(--red)':hLeft<=6?'#f59e0b':'var(--text)';
+  const isLive = hLeft <= 1;
+
+  return `
+  <div class="card" style="${isAlert ? 'margin-bottom:20px; border-color:#fbbf24; background:rgba(251,191,36,0.02);' : ''}">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+      <div class="card-title" style="margin-bottom:0; flex:1;" title="${o.question}">${o.question}</div>
+      ${isLive ? '<div style="background:var(--red); color:#fff; font-size:10px; font-weight:800; padding:2px 8px; border-radius:4px; animation:pulse 1.5s infinite; margin-left:10px; flex-shrink:0;">LIVE</div>' : ''}
+    </div>
+
+    <div class="card-row">
+      <div class="card-col">
+        <div class="card-label">Category</div>
+        <div class="token-info">
+          <div class="token-icon">${iconLetter}</div>
+          ${o.category || 'Event'}
+          <span class="token-change" style="color:#fbbf24;">⭐ ${o.score}</span>
+        </div>
+      </div>
+      <div class="card-col" style="align-items:flex-end;">
+        <div class="card-label">Win Probability</div>
+        <div class="prob-info">
+          <span class="prob-yes">${pYes}%</span>
+          <span class="prob-no" style="font-size:12px;"> (${o.outcome})</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-row" style="margin-top:8px;">
+      <div class="card-col">
+        <div class="card-label">Trading End (TH)</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);">${fmt(o.tradingEnd)}</div>
+      </div>
+      <div class="card-col" style="align-items:flex-end;">
+        <div class="card-label">Time Left</div>
+        <div class="time-left-ticker" data-end="${o.tradingEnd}" style="font-size:14px;font-weight:600;color:${urgColor}; font-family: 'VT323', monospace; letter-spacing: 0.5px;">⏳ ${tLeft}</div>
+      </div>
+    </div>
+
+    <div class="card-row" style="margin-top:8px;">
+      <div class="card-col">
+        <div class="card-label">Resolution (Payout)</div>
+        <div style="font-size:12px;color:var(--muted);">${fmt(o.resolution)}</div>
+      </div>
+      <div class="card-col" style="align-items:flex-end;">
+        <div class="card-label">Liquidity / Vol24h</div>
+        <div style="font-size:13px;color:var(--text);">${usd(o.liquidity)} / ${usd(o.vol24hr)}</div>
+      </div>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-top">
+        <span class="l">${o.outcome}</span>
+        <span class="r">${pYes}%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" style="width:${pYes}%;"></div>
+      </div>
+    </div>
+
+    <div class="card-actions">
+      <a href="${o.url}" target="_blank" class="btn-bet yes" style="text-decoration:none; ${isAlert ? 'background:#fbbf24;' : ''}">⚡ OPEN MARKET</a>
+      <button class="btn-bet no" onclick="logTrade(${i})">📝 Paper Trade</button>
+    </div>
+  </div>`;
+}
+
+function renderCards(opps){
+  currentOpps = opps;
+  const grid=document.getElementById('grid');
+  if(!opps||opps.length===0){
+    grid.innerHTML=`<div class="loading" style="grid-column:1/-1"><p style="font-size:32px">🔍</p><p style="margin-top:12px">ไม่พบตลาดที่ตรงเงื่อนไข</p></div>`;
+    return;
+  }
+  grid.innerHTML = opps.map((o,i)=> createCardHTML(o, i)).join('');
+}
+
+
+let sortIdx = 0;
+
+function applyFilters() {
+  if(!allData) return;
+  const maxH = WINS[timeIdx];
+  const now = new Date();
+  const todayStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD
+  
+  const searchInput = document.getElementById('search-input');
+  const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+  const filtered = allData.opportunities.filter(o => {
+    const dEnd = new Date(o.tradingEnd);
+    const h = (dEnd - now) / 3600000;
+    
+    let timeMatch = false;
+    if (timeIdx === -1) {
+      // 'Ending Today' filter: Adjusted to next 14 hours to cover UTC Midnight (7AM TH)
+      // and markets ending later tonight. This provides more practical results.
+      timeMatch = h > -0.5 && h <= 14;
+    } else {
+      // Other time filters (e.g., 10 mins, 24hr) use hoursLeft.
+      // Check if market ends within maxH hours from now, or if maxH is 0 (all time), just ensure it hasn't passed.
+      timeMatch = maxH === 0 ? h > -0.5 : (h > -0.5 && h <= maxH);
+    }
+
+    const catMatch = currentCat === 'All' ? true : 
+      (currentCat === 'Twitter' ? (o.category === 'Twitter' || (o.question && o.question.toLowerCase().includes('tweet'))) : o.category === currentCat);
+    
+    let searchMatch = true;
+    if (query) {
+      const qText = (o.question || '').toLowerCase();
+      const oText = (o.outcome || '').toLowerCase();
+      searchMatch = qText.includes(query) || oText.includes(query);
+    }
+
+    return timeMatch && catMatch && searchMatch;
+  }).sort((a,b) => {
+    if (sortIdx === 0) return b.score - a.score;
+    if (sortIdx === 1) return a.hoursLeft - b.hoursLeft;
+    return 0;
+  });
+  renderCards(filtered);
+}
+
+function setSort(idx, btn) {
+  sortIdx = idx;
+  document.querySelectorAll('.sort-filters .filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+
+function setTimeFilter(idx, btn){
+  timeIdx=idx;
+  document.querySelectorAll('.time-filters .filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+
+function setCatFilter(cat, btn){
+  currentCat = cat;
+  document.querySelectorAll('.cat-filters .filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+
+function toggleContext(btn) {
+  const box = btn.parentElement.nextElementSibling;
+  if(box && box.classList.contains('context-box')) {
+    if(box.style.display === 'none') {
+      box.style.display = 'block';
+      btn.style.background = 'rgba(255,106,0,0.2)';
+      btn.style.borderColor = 'rgba(255,106,0,0.5)';
+      btn.style.color = '#ff6a00';
+    } else {
+      box.style.display = 'none';
+      btn.style.background = 'rgba(255,255,255,0.05)';
+      btn.style.borderColor = 'rgba(255,255,255,0.1)';
+      btn.style.color = '#fff';
+    }
+  }
+}
+function startCountdown(ms){
+  clearInterval(countdownInterval);
+  nextRefresh=Date.now()+ms;
+  countdownInterval=setInterval(()=>{
+    const left=Math.max(0,nextRefresh-Date.now());
+    const s=Math.ceil(left/1000);
+    document.getElementById('countdown').textContent=left>0?`Refresh in ${s}s`:'';
+    if(left===0){clearInterval(countdownInterval);loadData(false);}
+  },1000);
+}
+
+let _pollTimer = null;
+let _loadBar = 5;
+
+function animateLoadBar(target) {
+  _loadBar = Math.min(target, 95);
+  const bar = document.getElementById('loading-bar');
+  if (bar) bar.style.width = _loadBar + '%';
+}
+
+async function loadData(manual = false) {
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Scanning...';
+  clearTimeout(_pollTimer);
+
+  if (manual) {
+    document.getElementById('grid').innerHTML = `
+      <div class="loading" style="grid-column:1/-1" id="initial-loading">
+        <div class="spinner"></div>
+        <p id="loading-text">กำลัง Refresh...</p>
+        <p style="font-size:12px;margin-top:6px" id="loading-sub">Fetching latest markets...</p>
+        <div id="loading-bar-wrap" style="width:240px;height:4px;background:var(--border);border-radius:2px;margin:16px auto 0;overflow:hidden;">
+          <div id="loading-bar" style="height:100%;width:10%;background:var(--accent);border-radius:2px;transition:width 0.5s;"></div>
+        </div>
+      </div>`;
+    animateLoadBar(20);
+  }
+
+  try {
+    const endpoint = manual ? '/api/scan?force=true' : '/api/scan';
+    const res = await fetch(endpoint);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // If server still scanning (no cache yet), keep polling
+    if (data.loading === true || (data.opportunities && data.opportunities.length === 0 && data.scanning)) {
+      animateLoadBar(Math.min(_loadBar + 10, 85));
+      const lt = document.getElementById('loading-text');
+      const ls = document.getElementById('loading-sub');
+      if (lt) lt.textContent = 'กำลังสแกน Polymarket...';
+      if (ls) ls.textContent = 'กำลังดึงข้อมูลจาก Gamma API (10–40 วินาที)';
+      _pollTimer = setTimeout(() => loadData(false), 4000);
+      btn.disabled = false;
+      btn.textContent = '🔄 Refresh';
+      return;
+    }
+
+    // Data ready
+    animateLoadBar(100);
+    allData = data;
+
+    // Stats — server returns stats[] with 9 time windows
+    const st = data.stats || [];
+    // stats indices: 0=10m 1=30m 2=1h 3=5h 4=12h 5=24h 6=2d 7=3d 8=7d
+    const totalOpps = (data.opportunities || []).length;
+    const count24h  = st[5]?.count ?? st.find(s => s.hours === 24)?.count ?? 0;
+    const count7d   = st[8]?.count ?? st.find(s => s.hours === 168)?.count ?? totalOpps;
+
+    let totalMarkets = data.totalMarkets || 0;
+    document.getElementById('s-total').textContent = totalMarkets >= 1000
+      ? (totalMarkets / 1000).toFixed(1) + 'k' : totalMarkets;
+    document.getElementById('s-all').textContent  = totalOpps;
+    if (document.getElementById('s-24h')) document.getElementById('s-24h').textContent = count24h;
+    if (document.getElementById('s-7d'))  document.getElementById('s-7d').textContent  = count7d;
+
+    document.getElementById('last-update').textContent = new Date(data.scannedAt)
+      .toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' });
+
+    applyFilters();
+    startCountdown(120_000); // next auto-refresh in 2 min
+
+  } catch (err) {
+    document.getElementById('grid').innerHTML = `<div class="error-box" style="grid-column:1/-1">🚨 Error: ${err.message}<br><small>Try refreshing again</small></div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 Refresh';
+  }
+}
+
+// Start on load — ทันทีที่ DOM พร้อม
+document.addEventListener('DOMContentLoaded', () => loadData(false));
+
+
+function tweetMarket(question, outcome, price, url) {
+  const q = decodeURIComponent(question);
+  const o = decodeURIComponent(outcome);
+  const p = (price * 100).toFixed(1);
+  const text = `🎯 พบโอกาสทำกำไรน่าสนใจบน Polymarket (Win Probability ${p}%)!\n\n📈 Market: ${q}\n✅ Side: ${o}\n\nTrade Here ⬇️\n${url}\n\n#Polymarket #CryptoTrading`;
+  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+}
+
+// Config logic
+async function fetchConfig() {
+  try {
+    const res = await fetch('/api/config');
+    const data = await res.json();
+    document.getElementById('cfg-min-price').value = data.MIN_PRICE;
+    document.getElementById('cfg-max-price').value = data.MAX_PRICE;
+    document.getElementById('cfg-min-liq').value = data.MIN_LIQUIDITY;
+    document.getElementById('cfg-min-vol').value = data.MIN_VOL24HR;
+    document.getElementById('cfg-max-spread').value = data.MAX_SPREAD;
+    if(data.apiCredentials) {
+      document.getElementById('cfg-builder-code').value = data.apiCredentials.builderCode || '';
+      document.getElementById('cfg-api-key').value = data.apiCredentials.apiKey || '';
+      document.getElementById('cfg-api-secret').value = data.apiCredentials.apiSecret || '';
+      document.getElementById('cfg-api-pass').value = data.apiCredentials.apiPass || '';
+    }
+  } catch(e){}
+}
+function openConfig() {
+  document.getElementById('config-modal').style.display = 'flex';
+  fetchConfig();
+}
+function closeConfig() {
+  document.getElementById('config-modal').style.display = 'none';
+}
+async function saveConfig() {
+  const btn = document.querySelector('#config-modal .btn-primary');
+  btn.textContent = 'Saving...';
+  btn.disabled = true;
+  
+  const payload = {
+    MIN_PRICE: parseFloat(document.getElementById('cfg-min-price').value),
+    MAX_PRICE: parseFloat(document.getElementById('cfg-max-price').value),
+    MIN_LIQUIDITY: parseFloat(document.getElementById('cfg-min-liq').value),
+    MIN_VOL24HR: parseFloat(document.getElementById('cfg-min-vol').value),
+    MAX_SPREAD: parseFloat(document.getElementById('cfg-max-spread').value),
+    apiCredentials: {
+      builderCode: document.getElementById('cfg-builder-code').value.trim(),
+      apiKey: document.getElementById('cfg-api-key').value.trim(),
+      apiSecret: document.getElementById('cfg-api-secret').value.trim(),
+      apiPass: document.getElementById('cfg-api-pass').value.trim()
+    }
+  };
+  
+  try {
+    const res = await fetch('/api/config', {
+      method: 'POST', body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      closeConfig();
+      loadData(true); // force refresh with new config
+    }
+  } catch(e){} finally {
+    btn.textContent = 'Save & Rescan';
+    btn.disabled = false;
+  }
+}
+
+// Backtest logic
+async function logTrade(idx) {
+  const opp = currentOpps[idx];
+  try {
+    const res = await fetch('/api/backtest/add', {
+      method: 'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(opp)
+    });
+    if(res.ok) {
+      alert('✅ Recorded trade to Backtest Log successfully!');
+    }
+  } catch(e) {
+    alert('🚨 Error saving trade!');
+  }
+}
+
+// Live Trade logic
+async function liveTrade(idx) {
+  const opp = currentOpps[idx];
+  const size = prompt(`⚡ LIVE TRADE: How many shares of [${opp.outcome}] do you want to buy?\n\nCurrent Price: $${(opp.price).toFixed(3)}\nMarket: ${opp.question}\n\nNote: Requires API Credentials in Config.`);
+  if(!size || isNaN(size) || size <= 0) return;
+  
+  if(!confirm(`You are about to BUY ${size} shares of ${opp.outcome} at $${opp.price}.\n\nTotal Cost: ~$${(size * opp.price).toFixed(2)}\nProceed?`)) return;
+
+  try {
+    const res = await fetch('/api/trade', {
+      method: 'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tokenID: opp.tokenID, // Requires server to supply clobTokenIds!
+        price: opp.price,
+        size: parseFloat(size),
+        side: 'BUY',
+        slug: opp.slug,
+        outcomeIdx: opp.outcomeIdx
+      })
+    });
+    
+    const data = await res.json();
+    if(res.ok && data.success) {
+      alert('✅ Order Placed Successfully via Polymarket Builder API!');
+    } else {
+      alert('🚨 Order Failed: ' + (data.error || 'Check your API credentials.'));
+    }
+  } catch(e) {
+    alert('🚨 Server Error during Live Trade.');
+  }
+}
+
+let portfolioInterval;
+
+async function openBacktest(silent = false) {
+  if (!silent) {
+    document.getElementById('bt-modal').style.display='flex';
+    document.getElementById('bt-body').innerHTML = '<tr><td colspan="5" style="text-align:center">Loading...</td></tr>';
+    clearInterval(portfolioInterval);
+    portfolioInterval = setInterval(() => openBacktest(true), 10000); // Live update every 10 seconds
+  }
+  try {
+    await fetch('/api/backtest/check');
+    const res = await fetch('/api/backtest/log');
+    const logs = await res.json();
+    
+    // Calculate Portfolio Summary
+    const closedTrades = logs.filter(l => l.status === 'Closed');
+    const totalTrades = logs.length;
+    const wins = closedTrades.filter(l => l.result === 'Win').length;
+    const winRate = closedTrades.length > 0 ? ((wins / closedTrades.length) * 100).toFixed(1) : 0;
+    
+    let totalPnL = 0;
+    logs.forEach(l => { if (l.pnl !== undefined) totalPnL += l.pnl; });
+
+    document.getElementById('dash-total').textContent = totalTrades;
+    document.getElementById('dash-winrate').textContent = winRate + '%';
+    document.getElementById('dash-pnl').textContent = (totalPnL > 0 ? '+' : '') + totalPnL.toFixed(2) + '%';
+    document.getElementById('dash-pnl').style.color = totalPnL >= 0 ? '#4ade80' : '#f87171';
+
+    window.currentLogs = logs; // For CSV export
+
+    if(logs.length === 0) {
+      document.getElementById('bt-body').innerHTML = '<tr><td colspan="5" style="text-align:center">No paper trades recorded yet.</td></tr>';
+      return;
+    }
+    
+    document.getElementById('bt-body').innerHTML = logs.map(l => {
+      const isClosed = l.status === 'Closed';
+      const hasPnL = l.pnl !== undefined;
+      const pnlClass = hasPnL && l.pnl > 0 ? 'bt-win' : (hasPnL && l.pnl < 0 ? 'bt-loss' : 'bt-open');
+      const pnlText = hasPnL ? (l.pnl > 0 ? `+${l.pnl.toFixed(2)}%` : `${l.pnl.toFixed(2)}%`) : '-';
+      
+      return `<tr>
+        <td>
+          <a href="${l.url}" target="_blank" style="color:var(--text); text-decoration:none;" onmouseover="this.style.color='#ff6a00'" onmouseout="this.style.color='var(--text)'">
+            <div style="max-width:280px; line-height:1.4; margin-bottom:6px;" title="${l.question}">${l.question}</div>
+          </a>
+          <span style="background:rgba(255,106,0,0.1); border:1px solid rgba(255,106,0,0.3); color:#ff6a00; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase;">
+            Bet: ${l.outcome}
+          </span>
+        </td>
+        <td style="vertical-align:top; padding-top:14px;">${(l.price*100).toFixed(1)}%</td>
+        <td style="vertical-align:top; padding-top:14px; color:${isClosed ? (l.result==='Win'?'#4ade80':'#f87171') : '#f59e0b'}">${l.status}</td>
+        <td class="${pnlClass}" style="vertical-align:top; padding-top:14px;">${pnlText}</td>
+        <td style="vertical-align:top; padding-top:14px;">${new Date(l.timestamp).toLocaleDateString()}</td>
+      </tr>`;
+    }).join('');
+    
+  } catch(e) {
+    if (!silent) {
+      document.getElementById('bt-body').innerHTML = '<tr><td colspan="5" style="text-align:center;color:red">Error loading logs</td></tr>';
+    }
+  }
+}
+
+function exportCSV() {
+  if(!window.currentLogs || window.currentLogs.length === 0) return alert('No data to export');
+  const headers = ['Market', 'EntryPrice', 'Status', 'Result', 'PnL_Percent', 'Timestamp'];
+  const rows = window.currentLogs.map(l => [
+    `"${l.question.replace(/"/g, '""')}"`,
+    l.price,
+    l.status,
+    l.result || '-',
+    l.pnl ? l.pnl.toFixed(2) : '0',
+    l.timestamp
+  ]);
+  const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", "polymarket_backtest_logs.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function closeBacktest() {
+  document.getElementById('bt-modal').style.display='none';
+  clearInterval(portfolioInterval);
+}
+
+// ── Quantitative Backtest Runner (PolyTest API) ────────────────
+async function runBacktest(idx) {
+  const opp = currentOpps[idx];
+  const modal = document.getElementById('bt-result-modal');
+  const content = document.getElementById('bt-result-content');
+  modal.style.display = 'flex';
+  content.innerHTML = `
+    <div style="text-align:center; padding: 40px;">
+      <div class="spinner" style="margin: 0 auto 16px;"></div>
+      <p style="color:var(--muted)">🔬 Running Backtest via PolyTest API...</p>
+      <p style="font-size:12px; color:var(--muted); margin-top:8px;">Topic: ${opp.question}</p>
+    </div>`;
+
+  try {
+    const res = await fetch('/api/backtest/run', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ slug: opp.slug, capital: 1000 })
+    });
+    const data = await res.json();
+
+    if (data.status === 'error' || data.status === 'no_data' || data.status === 'no_trades') {
+      content.innerHTML = `<div style="padding:24px; text-align:center;">
+        <div style="font-size:36px; margin-bottom:16px;">⚠️</div>
+        <p style="color:var(--text); font-weight:600;">${data.message || 'ไม่สามารถรัน Backtest ได้'}</p>
+        <p style="color:var(--muted); font-size:13px; margin-top:12px;">PolyTest API รองรับเฉพาะตลาด BTC/ETH Up/Down (5m, 15m) ในแผน Free</p>
+      </div>`;
+      return;
+    }
+
+    const m = data.metrics;
+    const roiColor = m.roi >= 0 ? '#4ade80' : '#f87171';
+    const tradeRows = (data.trades || []).map(t => `
+      <tr>
+        <td style="font-size:11px; color:var(--muted);">${t.slug.slice(-16)}</td>
+        <td>${(t.entry_price*100).toFixed(1)}%</td>
+        <td style="color:${t.outcome==='WIN'?'#4ade80':'#f87171'}">${t.outcome}</td>
+        <td style="color:${t.pnl_usd>=0?'#4ade80':'#f87171'}">${t.pnl_usd>0?'+':''}$${t.pnl_usd.toFixed(2)}</td>
+      </tr>`).join('');
+
+    content.innerHTML = `
+      <h3 style="margin:0 0 4px; color:var(--text);">🔬 Backtest Result</h3>
+      <p style="font-size:12px; color:var(--muted); margin:0 0 20px;">${opp.question.slice(0,60)}...</p>
+      
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px;">
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+          <div style="font-size:11px; color:var(--muted);">Win Rate</div>
+          <div style="font-size:20px; font-weight:bold; color:var(--accent);">${m.win_rate}%</div>
+        </div>
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+          <div style="font-size:11px; color:var(--muted);">ROI</div>
+          <div style="font-size:20px; font-weight:bold; color:${roiColor};">${m.roi>0?'+':''}${m.roi}%</div>
+        </div>
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+          <div style="font-size:11px; color:var(--muted);">Profit Factor</div>
+          <div style="font-size:20px; font-weight:bold; color:var(--text);">${m.profit_factor}x</div>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:20px; font-size:13px;">
+        <div style="color:var(--muted);">Total Trades: <span style="color:var(--text);">${m.total_trades}</span></div>
+        <div style="color:var(--muted);">Total PnL: <span style="color:${roiColor};">${m.total_pnl>0?'+':''}$${m.total_pnl}</span></div>
+        <div style="color:var(--muted);">Avg Win: <span style="color:#4ade80;">+$${m.avg_win}</span></div>
+        <div style="color:var(--muted);">Avg Loss: <span style="color:#f87171;">$${m.avg_loss}</span></div>
+      </div>
+
+      <table class="bt-table" style="margin-bottom:12px;">
+        <thead><tr><th>Market</th><th>Entry</th><th>Result</th><th>PnL</th></tr></thead>
+        <tbody>${tradeRows}</tbody>
+      </table>
+
+      <p style="font-size:11px; color:var(--muted); font-style:italic; margin:0;">⚠️ ${m.note}</p>`;
+  } catch(e) {
+    content.innerHTML = `<p style="color:#f87171; text-align:center;">🚨 Error: ${e.message}</p>`;
+  }
+}
+
+function closeBtResult() {
+  document.getElementById('bt-result-modal').style.display='none';
+}
+
+// ── Real-time Ticker Logic ────────────────────────────────────
+function updateTickers() {
+  const tickers = document.querySelectorAll('.time-left-ticker');
+  tickers.forEach(t => {
+    const endIso = t.getAttribute('data-end');
+    if (!endIso) return;
+    const newTime = timeLeft(endIso);
+    t.innerHTML = `⏳ ${newTime}`;
+    
+    // Update color if urgent
+    const ms = new Date(endIso) - new Date();
+    const h = ms / 3600000;
+    if (h <= 1) t.style.color = 'var(--red)';
+    else if (h <= 6) t.style.color = '#f59e0b';
+    else t.style.color = 'var(--text)';
+  });
+}
+setInterval(updateTickers, 1000); // Update every 1s for real-time feel
+</script>
+
+<!-- Analytics Modal -->
+<div id="bt-modal" class="modal-overlay" onclick="if(event.target===this)closeBacktest()">
+  <div class="modal" style="max-width: 700px; width: 90%;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+      <h2 style="margin:0">📊 Portfolio & Analytics</h2>
+      <button class="btn btn-primary" style="padding: 6px 12px; font-size: 13px;" onclick="exportCSV()">📥 Export CSV</button>
+    </div>
+    
+    <!-- Dashboard Cards -->
+    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
+      <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">Total Trades</div>
+        <div id="dash-total" style="font-size: 24px; font-weight: bold; color: var(--text);">0</div>
+      </div>
+      <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">Win Rate</div>
+        <div id="dash-winrate" style="font-size: 24px; font-weight: bold; color: var(--accent);">0%</div>
+      </div>
+      <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">Realized PnL</div>
+        <div id="dash-pnl" style="font-size: 24px; font-weight: bold; color: var(--text);">0%</div>
+      </div>
+    </div>
+
+    <div style="max-height: 400px; overflow-y: auto;">
+      <table class="bt-table">
+        <thead>
+          <tr>
+            <th>Market</th>
+            <th>Entry</th>
+            <th>Status</th>
+            <th>PnL %</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="bt-body">
+          <!-- Logs go here -->
+        </tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeBacktest()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Backtest Result Modal (PolyTest) -->
+<div id="bt-result-modal" class="modal-overlay" onclick="if(event.target===this)closeBtResult()" style="display:none;">
+  <div class="modal" style="max-width:620px; width:92%;">
+    <div id="bt-result-content">
+      <!-- Populated by JS -->
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-secondary" onclick="closeBtResult()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Watchlist Modal -->
+<div id="watchlist-modal" class="modal-overlay" onclick="if(event.target===this)closeWatchlist()" style="display:none;">
+  <div class="modal" style="max-width:660px;width:92%;max-height:85vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h2 style="margin:0;">⭐ Watchlist</h2>
+      <button onclick="closeWatchlist()" class="btn btn-secondary" style="padding:6px 14px;">✕</button>
+    </div>
+    <div id="watchlist-content"></div>
+  </div>
+</div>
+
+<!-- Alert Modal -->
+<div id="alert-modal" class="modal-overlay" onclick="if(event.target===this)closeAlerts()" style="display:none;">
+  <div class="modal" style="max-width:600px;width:92%;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;color:#fbbf24;">🔔 High-Conviction Alerts</h2>
+      <button onclick="closeAlerts()" class="btn btn-secondary" style="padding:6px 14px;">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Markets with Score &ge; 85 in the latest scan.</p>
+    <div id="alert-content"><p style="color:var(--muted);text-align:center;padding:20px;">Run a scan to see alerts.</p></div>
+  </div>
+</div>
+
+<script>
+// ── Watchlist ──────────────────────────────────────────────────────────
+async function addToWatchlist(idx, btn) {
+  const opp = currentOpps[idx]; if (!opp) return;
+  btn.textContent = '✅'; btn.disabled = true;
+  try {
+    await fetch('/api/watchlist', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ slug:opp.slug, outcome:opp.outcome, question:opp.question, price:opp.price, score:opp.score, url:opp.url, category:opp.category, endDate:opp.endDate })
+    });
+  } finally { setTimeout(() => { btn.textContent = '⭐ Watch'; btn.disabled = false; }, 2000); }
+}
+
+async function openWatchlist() {
+  document.getElementById('watchlist-modal').style.display = 'flex';
+  const c = document.getElementById('watchlist-content');
+  c.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading...</p></div>';
+  try {
+    const items = await (await fetch('/api/watchlist')).json();
+    if (!items.length) { c.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted);"><div style="font-size:48px;margin-bottom:12px;">⭐</div><p>Watchlist is empty.</p><p style="font-size:13px;margin-top:8px;">Press "⭐ Watch" on any market card to save it here.</p></div>`; return; }
+    c.innerHTML = items.map(item => `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.question}</div>
+          <div style="display:flex;gap:12px;margin-top:6px;font-size:13px;color:var(--muted);">
+            <span style="color:var(--accent);font-weight:700;">${(item.price*100).toFixed(1)}%</span>
+            <span>Score: ${item.score}</span><span>${item.category||''}</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <a href="${item.url}" target="_blank" class="btn btn-secondary" style="padding:6px 12px;font-size:12px;">🔗</a>
+          <button onclick="removeWL('${item.slug}','${item.outcome.replace(/'/g,"\\'")}',this)" class="btn btn-secondary" style="padding:6px 12px;font-size:12px;color:var(--red);">🗑️</button>
+        </div>
+      </div>`).join('');
+  } catch(e) { c.innerHTML = `<p style="color:var(--red);text-align:center;">Error loading watchlist.</p>`; }
+}
+
+async function removeWL(slug, outcome, btn) {
+  btn.disabled = true; btn.textContent = '...';
+  await fetch('/api/watchlist', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ slug, outcome }) });
+  openWatchlist();
+}
+function closeWatchlist() { document.getElementById('watchlist-modal').style.display = 'none'; }
+
+// ── Alerts ─────────────────────────────────────────────────────────────
+async function pollAlerts() {
+  try {
+    const { alerts } = await (await fetch('/api/alerts')).json();
+    const badge = document.getElementById('alert-count');
+    if (alerts && alerts.length > 0) {
+      badge.textContent = alerts.length; badge.style.display = 'inline';
+      document.getElementById('alert-content').innerHTML = alerts.map((a, i) => createCardHTML(a, i, true)).join('');
+    } else {
+      badge.style.display = 'none';
+      document.getElementById('alert-content').innerHTML = `<p style="color:var(--muted);text-align:center;padding:20px;">No high-conviction alerts right now.</p>`;
+    }
+  } catch(e) {}
+}
+
+// Update Modal width in the same call if possible by adjusting the style
+function openAlerts() { 
+  const modal = document.getElementById('alert-modal');
+  modal.querySelector('.modal').style.maxWidth = '750px';
+  modal.style.display='flex'; 
+  pollAlerts(); 
+}
+function closeAlerts() { document.getElementById('alert-modal').style.display='none'; }
+
+setInterval(pollAlerts, 30_000);
+setTimeout(pollAlerts, 5000);
+</script>
+
+</body>
+</html>
