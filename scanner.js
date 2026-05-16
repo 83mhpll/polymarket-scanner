@@ -126,8 +126,8 @@ async function fetchWithTimeout(url, ms = 10_000) {
 //   • Tier 3: Weekly (Ending within 7d) - Medium-term breadth
 // Then deduplicate by conditionId and return merged list.
 export async function fetchMarkets(onProgress) {
-  const PAGE = 500;
-  const MAX_PAGES = 10; // Up to 5,000 markets per tier should be plenty
+  const PAGE = 100; // Polymarket Gamma API max limit is 100
+  const MAX_PAGES = 50; // Up to 5,000 markets per tier
 
   const now = Date.now();
   const end6h = new Date(now + 6 * 3_600_000).toISOString();
