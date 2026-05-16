@@ -147,56 +147,38 @@ export async function fetchMarkets(onProgress) {
     );
 
     while (hasMore && page < MAX_PAGES) {
-      // Fetch in small parallel batches to stay within rate limits but move fast
-      const BATCH = 2;
-      const batchN = Math.min(BATCH, MAX_PAGES - page);
-      const fetches = [];
-
-      for (let i = 0; i < batchN; i++) {
-        // We sort by 'volume24hr' to get the most liquid markets first in each tier
-        const url = `${GAMMA_API}/markets?closed=false&active=true&limit=${PAGE}&offset=${offset + i * PAGE}&end_date_max=${endDateParam}&order=volume24hr&ascending=false`;
-        fetches.push(
-          fetchWithTimeout(url, 15_000).catch((err) => {
-            console.warn(
-              `[Scanner] Fetch failed for ${label} offset ${offset + i * PAGE}:`,
-              err.message,
-            );
-            return [];
-          }),
-        );
-      }
-
-      const pages = await Promise.all(fetches);
-      let gotShort = false;
-
-      for (const pg of pages) {
-        if (!Array.isArray(pg)) continue;
-        all.push(...pg);
-        totalFetched += pg.length;
-        if (pg.length < PAGE) {
-          hasMore = false;
-          gotShort = true;
-          break;
+      const url = `${GAMMA_API}/markets?closed=false&active=true&limit=${PAGE}&offset=${offset}&end_date_max=${endDateParam}&order=volume24hr&ascending=false`;
+      
+      try {
+        const pg = await fetchWithTimeout(url, 15_000);
+        if (Array.isArray(pg)) {
+          all.push(...pg);
+          totalFetched += pg.length;
+          if (pg.length < PAGE) {
+            hasMore = false;
+          }
         }
+      } catch (err) {
+        console.warn(`[Scanner] Fetch failed for ${label} offset ${offset}:`, err.message);
+        hasMore = false; // Stop this tier if rate limited
       }
 
-      page += batchN;
-      offset += batchN * PAGE;
+      page++;
+      offset += PAGE;
 
       if (onProgress) onProgress(totalFetched);
-      if (gotShort) break;
+      // Wait 500ms between requests to avoid rate limiting on cloud servers
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     console.log(`[Scanner] ${label}: ${all.length} raw markets fetched`);
     return all;
   }
 
-  // Fetch tiers in parallel
-  const [tier1, tier2, tier3] = await Promise.all([
-    paginateTier(end6h, "Urgent (6h)"),
-    paginateTier(end24h, "Daily (24h)"),
-    paginateTier(end7d, "Weekly (7d)"),
-  ]);
+  // Fetch tiers sequentially to avoid rate limits
+  const tier1 = await paginateTier(end6h, "Urgent (6h)");
+  const tier2 = await paginateTier(end24h, "Daily (24h)");
+  const tier3 = await paginateTier(end7d, "Weekly (7d)");
 
   // Deduplicate by conditionId (primary) or id/question (fallback)
   const seen = new Set();
