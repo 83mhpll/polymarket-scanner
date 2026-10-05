@@ -5,3 +5,7 @@ node_modules
 watchlist.json
 backtest.json
 sample_markets.json
+__pycache__/
+*.pyc
+*.pyo
+.python-version
