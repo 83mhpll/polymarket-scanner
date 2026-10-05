@@ -1,52 +1,81 @@
 #!/bin/bash
-# 🚀 Polymarket Pro - Ubuntu 22.04 VPS Deployment Script
+# ══════════════════════════════════════════════════════════════════════
+# 🚀 Polymarket Pro - Automated Ubuntu VPS Deployment Script
+# ══════════════════════════════════════════════════════════════════════
 
-echo "Starting deployment setup..."
+set -e
 
-# 1. Update and install dependencies
-sudo apt-get update
-sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common nginx certbot python3-certbot-nginx
+echo "=========================================="
+echo " Starting Polymarket Scanner Deployment..."
+echo "=========================================="
 
-# 2. Install Docker
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+# 1. Update system packages
+echo "📦 Updating system packages..."
+sudo apt-get update && sudo apt-get upgrade -y
+sudo apt-get install -y curl wget git build-essential nginx certbot python3-certbot-nginx ufw python3-pip python3-numpy python3-pandas python3-requests
 
-# 3. Setup Project Directory
-mkdir -p /opt/polymarket-pro
-cd /opt/polymarket-pro
+# 2. Install Node.js 20 LTS (if not installed)
+if ! command -v node &> /dev/null; then
+    echo "📦 Installing Node.js 20 LTS..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+fi
 
-# Assuming code is cloned here... (replace with your git clone)
-# git clone https://github.com/yourusername/polymarket-pro.git .
+echo "Node version: $(node -v)"
+echo "NPM version: $(npm -v)"
 
-# 4. Configure Nginx
-cat << 'EOF' | sudo tee /etc/nginx/sites-available/polymarket
-server {
-    listen 80;
-    server_name yourdomain.com www.yourdomain.com;
+# 3. Install PM2 globally
+if ! command -v pm2 &> /dev/null; then
+    echo "📦 Installing PM2 process manager..."
+    sudo npm install -g pm2
+fi
 
-    location / {
-        proxy_pass http://localhost:3001;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-EOF
+# 4. Install Docker & Docker Compose (Optional / Recommended)
+if ! command -v docker &> /dev/null; then
+    echo "🐳 Installing Docker..."
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sudo sh get-docker.sh
+    sudo usermod -aG docker $USER
+    rm -f get-docker.sh
+fi
 
-sudo ln -s /etc/nginx/sites-available/polymarket /etc/nginx/sites-enabled/
-sudo rm /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl restart nginx
+# 5. Setup Project Dependencies
+echo "📦 Installing project dependencies..."
+npm install --omit=dev
 
-# 5. SSL Certificate via Certbot (Run manually after DNS propagates)
-# sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+# 6. Setup .env if not exists
+if [ ! -f .env ]; then
+    if [ -f .env.example ]; then
+        echo "📝 Creating .env from .env.example..."
+        cp .env.example .env
+        echo "⚠️ Please edit .env with your actual API keys using: nano .env"
+    fi
+fi
 
-# 6. Start the App
-echo "Starting application..."
-npm install
-pm2 start server.js --name polymarket-pro # Assuming PM2 is installed globally
+# 7. Start application with PM2
+echo "🚀 Starting app with PM2..."
+pm2 delete polymarket-pro 2>/dev/null || true
+pm2 start server.js --name polymarket-pro
+pm2 save
+pm2 startup | tail -n 1 | sudo bash || true
 
-echo "✅ Deployment complete! Don't forget to run certbot and setup your .env file."
+# 8. Firewall setup (UFW)
+echo "🛡️ Configuring Firewall..."
+sudo ufw allow 22/tcp || true
+sudo ufw allow 80/tcp || true
+sudo ufw allow 443/tcp || true
+sudo ufw --force enable || true
+
+echo "=========================================="
+echo "✅ Deployment completed successfully!"
+echo "=========================================="
+echo "Useful Commands:"
+echo " - View logs:       pm2 logs polymarket-pro"
+echo " - Check status:    pm2 status"
+echo " - Restart service: pm2 restart polymarket-pro"
+echo " - Edit env file:   nano .env"
+echo ""
+echo "To setup Domain + SSL (Nginx):"
+echo " 1. Configure /etc/nginx/sites-available/polymarket"
+echo " 2. Run: sudo certbot --nginx -d yourdomain.com"
+echo "=========================================="
