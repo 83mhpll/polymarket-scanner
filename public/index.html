@@ -404,6 +404,95 @@
     box-shadow: 0 0 22px rgba(248, 113, 113, 0.4);
   }
 
+  /* Pro Card Enhancements */
+  .card-score-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: var(--radius-pill);
+    font-size: 11px; font-weight: 800; font-family: 'Outfit', sans-serif;
+  }
+  .card-action-icon {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+    color: var(--muted); cursor: pointer; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 13px;
+    transition: all 0.2s ease;
+  }
+  .card-action-icon:hover {
+    background: rgba(255,255,255,0.14); color: #ffffff; transform: scale(1.08);
+  }
+  .target-advantage-bar {
+    background: rgba(163, 230, 53, 0.08);
+    border: 1px solid rgba(163, 230, 53, 0.25);
+    border-radius: 10px; padding: 7px 12px; margin: 10px 0 12px 0;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .card-metrics-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 12px; padding: 10px; margin-bottom: 12px;
+  }
+  .card-metric-col {
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+  }
+  .card-metric-label {
+    font-size: 9px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .card-metric-val {
+    font-size: 13px; font-weight: 800; font-family: 'Outfit', sans-serif; margin-top: 2px;
+  }
+  .card-drawer {
+    display: none;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px; margin-bottom: 12px;
+    animation: fadeIn 0.2s ease;
+  }
+  .drawer-toggle-btn {
+    width: 100%; padding: 6px; border-radius: 8px;
+    background: transparent; border: 1px dashed var(--border);
+    color: var(--muted); font-size: 11px; font-weight: 700;
+    cursor: pointer; margin-bottom: 12px; transition: all 0.2s ease;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .drawer-toggle-btn:hover {
+    background: rgba(255,255,255,0.04); color: #ffffff; border-style: solid;
+  }
+  .btn-quick-sim {
+    padding: 10px 14px; border-radius: var(--radius-md);
+    background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3);
+    color: var(--accent-cyan); font-weight: 800; font-size: 12px;
+    cursor: pointer; transition: all 0.25s ease; display: inline-flex;
+    align-items: center; justify-content: center; gap: 4px;
+    white-space: nowrap;
+  }
+  .btn-quick-sim:hover {
+    background: rgba(56, 189, 248, 0.22); transform: translateY(-1px);
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.3);
+  }
+
+  /* Global Toast System */
+  #toast-container {
+    position: fixed; bottom: 28px; right: 28px; z-index: 10000;
+    display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+  }
+  .toast-item {
+    pointer-events: auto;
+    background: rgba(13, 18, 30, 0.95);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 20px rgba(163, 230, 53, 0.15);
+    color: #ffffff; padding: 12px 18px; border-radius: 12px;
+    font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 10px;
+    animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1), toastFadeOut 0.3s ease 2.7s forwards;
+  }
+  @keyframes toastSlideIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes toastFadeOut {
+    to { opacity: 0; transform: translateY(-10px); pointer-events: none; }
+  }
+
   @media (max-width: 1200px) {
     .grid-row-top { grid-template-columns: 1fr; }
     .sidebar { display: none; }
@@ -916,44 +1005,131 @@ function createCardHTML(o, i, isAlert = false) {
 
   // Resolution Oracle Badge logic
   const oracleBadge = o.category === 'Crypto' ? '⚡ Pyth / Chainlink' : o.category === 'Politics' ? '📰 AP News Source' : '🛡️ UMA Oracle';
-  const deltaVal = ((o.score % 7) + 1.2).toFixed(1);
+
+  // 1. Target Clarification
+  const targetSide = (o.outcome || 'YES').toUpperCase();
+  const isYesTarget = targetSide === 'YES' || o.outcomeIdx === 0;
+  const targetPrice = o.price;
+  const targetCent = (targetPrice * 100).toFixed(0);
+
+  // 2. Metrics Calculation: Net Yield, APY, Kelly Size, Safe Liquidity
+  const netYieldPct = ((1 - targetPrice) / targetPrice * 100).toFixed(1);
+  
+  let apyDisplay = '—';
+  if (hLeft > 0) {
+    const annualPeriods = 8760 / Math.max(hLeft, 0.5);
+    const simpleApy = ((1 - targetPrice) / targetPrice) * annualPeriods * 100;
+    if (simpleApy > 9999) {
+      apyDisplay = '>9,999%';
+    } else if (simpleApy >= 1000) {
+      apyDisplay = `+${(simpleApy/1000).toFixed(1)}k%`;
+    } else {
+      apyDisplay = `+${simpleApy.toFixed(0)}%`;
+    }
+  }
+
+  // Kelly Sizing
+  const pModel = Math.min(targetPrice + (( (o.score || 50) - 50) * 0.001), 0.99);
+  const b = (1 - targetPrice) / targetPrice;
+  const q = 1 - pModel;
+  const rawKelly = b > 0 ? (b * pModel - q) / b : 0;
+  const safeKellyPct = Math.max(1.0, Math.min(8.0, rawKelly * 40)).toFixed(1);
+  const safeKellyUsd = Math.round(parseFloat(safeKellyPct) * 10); // for $1,000 reference portfolio
+
+  // Safe Max Order Depth heuristic (typical orderbook absorbs ~4% before 1.5% slip)
+  const maxSafeDepth = Math.max(50, Math.min(2500, Math.round((o.liquidity || 0) * 0.04)));
+
+  // Score Badge Styling
+  const scoreVal = o.score || 0;
+  const scoreBadgeBg = scoreVal >= 75 ? 'rgba(163,230,53,0.15)' : scoreVal >= 60 ? 'rgba(251,191,36,0.15)' : 'rgba(148,163,184,0.15)';
+  const scoreBadgeBorder = scoreVal >= 75 ? 'rgba(163,230,53,0.35)' : scoreVal >= 60 ? 'rgba(251,191,36,0.35)' : 'rgba(148,163,184,0.3)';
+  const scoreBadgeColor = scoreVal >= 75 ? '#a3e635' : scoreVal >= 60 ? '#fbbf24' : '#cbd5e1';
+
+  // Whale / High Flow Activity
+  const vol = o.vol24hr || 0;
+  const volRatio = o.liquidity > 0 ? vol / o.liquidity : 0;
+  const hasWhaleFlow = volRatio > 1.2 || vol >= 10000;
+
+  const drawerId = `drawer-${i}`;
 
   return `
   <div class="card" style="${isAlert ? 'border-color:#fbbf24; box-shadow: 0 0 24px rgba(251,191,36,0.2);' : ''}">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <!-- Header Bar with Quick Action Icons & Score -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
       <div style="display:flex; align-items:center; gap:6px;">
         <span style="background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.25); color:#38bdf8; font-weight:700; font-size:11px; padding:3px 9px; border-radius:9999px;">
           ${o.category || 'Event'}
         </span>
         ${isLive ? '<span style="background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.4); color:#f87171; font-weight:800; font-size:10px; padding:2px 7px; border-radius:9999px; animation:pulse 1.5s infinite;">● LIVE</span>' : ''}
+        ${hasWhaleFlow ? '<span style="background:rgba(192,132,252,0.15); border:1px solid rgba(192,132,252,0.35); color:#c084fc; font-weight:800; font-size:10px; padding:2px 7px; border-radius:9999px;" title="High volume anomaly vs liquidity">🐋 WHALE FLOW</span>' : ''}
       </div>
+
+      <!-- Quick Action Icons Cluster + Conviction Score -->
+      <div style="display:flex; align-items:center; gap:6px;">
+        <button class="card-action-icon" onclick="copySignal(${i})" title="Copy Signal to Clipboard">📋</button>
+        <button class="card-action-icon" id="wl-btn-${i}" onclick="quickWatchlistToggle(${i}, this)" title="Add / Remove Watchlist">⭐</button>
+        <div class="card-score-badge" style="background:${scoreBadgeBg}; border:1px solid ${scoreBadgeBorder}; color:${scoreBadgeColor};" title="Conviction Score (0-100)">
+          ⚡ ${scoreVal}
+        </div>
+      </div>
+    </div>
+
+    <!-- Time & Expiry Row -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:11px;">
+      <span style="color:var(--muted); font-weight:600;">Expiry Countdown:</span>
       <div class="time-left-ticker" data-end="${o.tradingEnd}" style="font-size:11px; font-weight:700; color:${urgColor}; font-family:'Outfit', sans-serif;">
         ⏳ ${tLeft}
       </div>
     </div>
 
-    <div class="card-title" title="${escapeHTML(o.question)}" style="font-size:15px; font-weight:700; line-height:1.35; color:#ffffff; margin-bottom:12px; height:42px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${safeQuestion}</div>
+    <!-- Question Title -->
+    <div class="card-title" title="${escapeHTML(o.question)}" style="font-size:15px; font-weight:700; line-height:1.35; color:#ffffff; margin-bottom:10px; height:42px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${safeQuestion}</div>
 
-    <!-- Dual-Format Probability Display -->
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-      <div style="display:flex; align-items:baseline; gap:6px;">
-        <span style="font-size:22px; font-weight:800; color:#ffffff; font-family:'Outfit', sans-serif;">${centYes}¢</span>
-        <span style="font-size:13px; color:var(--accent); font-weight:700;">• ${pYes}% Chance</span>
+    <!-- Target Advantage Banner (Solves YES/NO ambiguity) -->
+    <div class="target-advantage-bar">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="font-size:11px; font-weight:800; color:var(--text-secondary);">🎯 ADVANTAGE:</span>
+        <span style="font-size:12px; font-weight:800; color:var(--accent); background:rgba(163,230,53,0.15); border:1px solid rgba(163,230,53,0.3); padding:2px 8px; border-radius:6px;">
+          ${escapeHTML(o.outcome || 'YES')} @ ${targetCent}¢
+        </span>
       </div>
-      <span style="font-size:11px; font-weight:700; color:var(--green); background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.25); padding:2px 8px; border-radius:6px;">
-        ▲ +${deltaVal}%
-      </span>
+      <div style="font-size:12px; font-weight:800; color:var(--green);">
+        ${pYes}% Chance
+      </div>
     </div>
 
-    <!-- Mini SVG Probability Sparkline -->
-    <div style="margin:2px 0 6px;">
-      <svg viewBox="0 0 200 32" style="width:100%; height:30px; display:block;">
+    <!-- Micro Financial Telemetry Grid: Yield, APY, Kelly Size, Depth -->
+    <div class="card-metrics-grid">
+      <div class="card-metric-col">
+        <span class="card-metric-label">NET YIELD</span>
+        <span class="card-metric-val" style="color:var(--accent);">+${netYieldPct}%</span>
+      </div>
+      <div class="card-metric-col">
+        <span class="card-metric-label">EST. APY</span>
+        <span class="card-metric-val" style="color:var(--accent-purple);">${apyDisplay}</span>
+      </div>
+      <div class="card-metric-col">
+        <span class="card-metric-label">KELLY SIZE</span>
+        <span class="card-metric-val" style="color:var(--accent-cyan);">$${safeKellyUsd} <small style="font-size:9px;color:var(--muted);">(${safeKellyPct}%)</small></span>
+      </div>
+      <div class="card-metric-col">
+        <span class="card-metric-label">MAX DEPTH</span>
+        <span class="card-metric-val" style="color:var(--text-secondary);">$${maxSafeDepth}</span>
+      </div>
+    </div>
+
+    <!-- Mini SVG Probability Sparkline with 87% Conviction Threshold Line -->
+    <div style="margin:2px 0 8px; position:relative;">
+      <svg viewBox="0 0 200 32" style="width:100%; height:32px; display:block;">
         <defs>
           <linearGradient id="card-grad-${i}" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#a3e635" stop-opacity="0.35"/>
+            <stop offset="0%" stop-color="#a3e635" stop-opacity="0.4"/>
             <stop offset="100%" stop-color="#a3e635" stop-opacity="0.0"/>
           </linearGradient>
         </defs>
+        <!-- 87% Conviction Threshold line (at y=16) -->
+        <line x1="0" y1="16" x2="200" y2="16" stroke="rgba(255,255,255,0.12)" stroke-dasharray="3,3" stroke-width="1"/>
+        <text x="4" y="13" fill="rgba(255,255,255,0.35)" font-size="7" font-weight="700" font-family="'Outfit', sans-serif">87% FLOOR</text>
         <path d="M0,28 Q45,${20 - (i%4)*3} 95,${14 + (i%3)*3} T200,${6 + (i%5)*2}" fill="none" stroke="#a3e635" stroke-width="2.2" stroke-linecap="round"/>
         <path d="M0,28 Q45,${20 - (i%4)*3} 95,${14 + (i%3)*3} T200,${6 + (i%5)*2} L200,32 L0,32 Z" fill="url(#card-grad-${i})"/>
       </svg>
@@ -961,7 +1137,7 @@ function createCardHTML(o, i, isAlert = false) {
 
     <!-- Phase 3: Mispricing Alert Banner -->
     ${o.mispricing ? `
-    <div style="margin: 6px 0 8px; padding: 7px 11px; border-radius: 10px;
+    <div style="margin: 4px 0 8px; padding: 7px 11px; border-radius: 10px;
       background: ${o.mispricing.signal === 'OVERBOUGHT' ? 'rgba(248,113,113,0.10)' : 'rgba(52,211,153,0.10)'};
       border: 1px solid ${o.mispricing.signal === 'OVERBOUGHT' ? 'rgba(248,113,113,0.30)' : 'rgba(52,211,153,0.30)'};
       font-size:11px; display:flex; align-items:flex-start; gap:6px;">
@@ -974,7 +1150,7 @@ function createCardHTML(o, i, isAlert = false) {
       </div>
     </div>` : ''}
 
-    <!-- Phase 2: Smart Signal Badges (top 3 signals) -->
+    <!-- Phase 2: Top Signal Badges -->
     ${(() => {
       const sigs = (o.rationale || []).slice(0, 3);
       if (!sigs.length) return '';
@@ -987,10 +1163,33 @@ function createCardHTML(o, i, isAlert = false) {
             background:${colorMap[s.strength]}; border:1px solid ${borderMap[s.strength]};
             color:${textMap[s.strength]}; display:flex; align-items:center; gap:3px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
             title="${escapeHTML(s.text)}">
-            ${s.icon} ${escapeHTML(s.text.length > 42 ? s.text.slice(0, 42) + '…' : s.text)}
+            ${s.icon} ${escapeHTML(s.text.length > 40 ? s.text.slice(0, 40) + '…' : s.text)}
           </span>`).join('')}
       </div>`;
     })()}
+
+    <!-- Expandable Analysis Drawer Button -->
+    <button class="drawer-toggle-btn" id="${drawerId}-btn" onclick="toggleCardDrawer('${drawerId}')">
+      🔍 Deep Dive Analysis (${(o.rationale || []).length} Signals) ▼
+    </button>
+
+    <!-- Expandable Analysis Drawer Content -->
+    <div class="card-drawer" id="${drawerId}">
+      <div style="font-size:11px; font-weight:800; color:#ffffff; margin-bottom:8px; display:flex; justify-content:space-between;">
+        <span>📊 QUANT TELEMETRY & SIGNALS</span>
+        <span style="color:var(--accent);">Score: ${scoreVal}/100</span>
+      </div>
+      <div style="font-size:11px; color:var(--text-secondary); line-height:1.5; margin-bottom:8px;">
+        ${(o.rationale || []).map(r => `<div style="margin-bottom:4px; display:flex; gap:6px;"><span>${r.icon}</span><span>${escapeHTML(r.text)}</span></div>`).join('')}
+      </div>
+      ${o.mispricing ? `
+      <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:10px; color:var(--muted); margin-top:6px;">
+        <b>Base Rate Analysis:</b> Cat: ${escapeHTML(o.category)} | Base rate ~${Math.round(o.mispricing.baseRate*100)}% | Implied Market: ${Math.round(o.price*100)}% (Gap: ${o.mispricing.gap > 0 ? '+' : ''}${Math.round(o.mispricing.gap*100)}%)
+      </div>` : ''}
+      <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:10px; color:var(--muted); margin-top:6px;">
+        <b>Execution Sizing:</b> Half-Kelly ${safeKellyPct}% ($${safeKellyUsd}/$1k) | Max Safe Order: $${maxSafeDepth} (Slip &le;1.5%)
+      </div>
+    </div>
 
     <!-- Resolution Trust Badge & Liquidity Row -->
     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:auto; padding-top:10px; border-top:1px solid rgba(255,255,255,0.06); font-size:11px;">
@@ -1002,13 +1201,22 @@ function createCardHTML(o, i, isAlert = false) {
       </div>
     </div>
 
-    <!-- Direct YES / NO Dual Action Buttons -->
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px;">
-      <button class="btn-bet yes" onclick="openOrderModal('${escapeJSArg(o.question)}', 'YES', ${o.price}, '${escapeJSArg(o.url)}')">
-        🟢 Buy YES ${centYes}¢
-      </button>
-      <button class="btn-bet no" onclick="openOrderModal('${escapeJSArg(o.question)}', 'NO', ${(1 - o.price).toFixed(3)}, '${escapeJSArg(o.url)}')">
-        🔴 Buy NO ${centNo}¢
+    <!-- Dual Action Trading Buttons with Advantage Highlight & 1-Click Quick Sim Button -->
+    <div style="display:flex; gap:8px; margin-top:12px; align-items:center;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; flex:1;">
+        <button class="btn-bet yes" 
+                style="${isYesTarget ? 'box-shadow: 0 0 18px rgba(163,230,53,0.45); border: 2px solid rgba(255,255,255,0.9);' : 'opacity:0.85;'}"
+                onclick="openOrderModal('${escapeJSArg(o.question)}', 'YES', ${o.price}, '${escapeJSArg(o.url)}')">
+          🟢 Buy YES ${centYes}¢ ${isYesTarget ? '🔥' : ''}
+        </button>
+        <button class="btn-bet no" 
+                style="${!isYesTarget ? 'box-shadow: 0 0 18px rgba(248,113,113,0.45); border: 2px solid rgba(255,255,255,0.9);' : 'opacity:0.85;'}"
+                onclick="openOrderModal('${escapeJSArg(o.question)}', 'NO', ${(1 - o.price).toFixed(3)}, '${escapeJSArg(o.url)}')">
+          🔴 Buy NO ${centNo}¢ ${!isYesTarget ? '🔥' : ''}
+        </button>
+      </div>
+      <button class="btn-quick-sim" onclick="quickPaperTrade(${i}, 50)" title="1-Click Sim: Log $50 Paper Trade">
+        📝 Sim $50
       </button>
     </div>
   </div>`;
@@ -2431,7 +2639,133 @@ function closeAlerts() { document.getElementById('alert-modal').style.display='n
 
 setInterval(pollAlerts, 30_000);
 setTimeout(pollAlerts, 5000);
+
+// ── Pro Card Interactive Helpers ─────────────────────────────────────
+function showToast(msg, icon = '✅') {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    document.body.appendChild(container);
+  }
+  const item = document.createElement('div');
+  item.className = 'toast-item';
+  item.innerHTML = `<span style="font-size:16px;">${icon}</span><span>${escapeHTML(msg)}</span>`;
+  container.appendChild(item);
+  setTimeout(() => {
+    if (item.parentNode) item.parentNode.removeChild(item);
+  }, 3000);
+}
+
+function toggleCardDrawer(id) {
+  const el = document.getElementById(id);
+  const btn = document.getElementById(id + '-btn');
+  if (!el) return;
+  const isHidden = el.style.display === 'none' || !el.style.display;
+  el.style.display = isHidden ? 'block' : 'none';
+  if (btn) {
+    btn.innerHTML = isHidden ? '▲ Hide Analysis' : '🔍 Deep Dive Analysis ▼';
+  }
+}
+
+async function quickWatchlistToggle(idx, btnEl) {
+  const opp = currentOpps[idx];
+  if (!opp) return;
+  const isSaved = btnEl.getAttribute('data-saved') === 'true';
+  try {
+    if (!isSaved) {
+      await fetch('/api/watchlist', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          slug: opp.slug,
+          outcome: opp.outcome,
+          question: opp.question,
+          price: opp.price,
+          score: opp.score,
+          url: opp.url,
+          category: opp.category,
+          endDate: opp.tradingEnd
+        })
+      });
+      btnEl.setAttribute('data-saved', 'true');
+      btnEl.style.color = '#fbbf24';
+      btnEl.style.background = 'rgba(251, 191, 36, 0.2)';
+      btnEl.style.borderColor = 'rgba(251, 191, 36, 0.4)';
+      showToast('Saved to Watchlist', '⭐');
+    } else {
+      await fetch('/api/watchlist', {
+        method: 'DELETE',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ slug: opp.slug, outcome: opp.outcome })
+      });
+      btnEl.setAttribute('data-saved', 'false');
+      btnEl.style.color = 'var(--muted)';
+      btnEl.style.background = 'rgba(255, 255, 255, 0.05)';
+      btnEl.style.borderColor = 'var(--border)';
+      showToast('Removed from Watchlist', '🗑️');
+    }
+  } catch (e) {
+    showToast('Failed to update watchlist', '⚠️');
+  }
+}
+
+async function quickPaperTrade(oppIdx, amount = 50) {
+  const opp = currentOpps[oppIdx];
+  if (!opp) return;
+  try {
+    const trade = {
+      id: Date.now().toString(),
+      slug: opp.slug,
+      question: opp.question,
+      outcome: opp.outcome || 'YES',
+      outcomeIdx: opp.outcomeIdx || 0,
+      price: opp.price,
+      amount: amount,
+      status: 'Open',
+      timestamp: new Date().toISOString()
+    };
+    const res = await fetch('/api/backtest/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(trade)
+    });
+    if (res.ok) {
+      showToast(`Logged $${amount} Sim Trade on ${opp.outcome || 'YES'}!`, '📝');
+    } else {
+      showToast('Error recording simulation trade', '⚠️');
+    }
+  } catch (e) {
+    showToast('Failed: ' + e.message, '⚠️');
+  }
+}
+
+function copySignal(oppIdx) {
+  const opp = currentOpps[oppIdx];
+  if (!opp) return;
+  const prob = (opp.price * 100).toFixed(1);
+  const yieldPct = ((1 - opp.price) / opp.price * 100).toFixed(1);
+  const text = `🎯 POLYMARKET PRO SIGNAL:
+📋 Market: ${opp.question}
+🎯 Advantage Side: ${opp.outcome || 'YES'} @ ${(opp.price * 100).toFixed(0)}¢ (${prob}% Prob)
+💰 Projected Net Yield: +${yieldPct}%
+⚡ Conviction Score: ${opp.score || 0}/100
+⏳ Expiry: ${timeLeft(opp.tradingEnd)}
+🔗 Trade: ${opp.url}`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('Signal copied to clipboard!', '📋');
+    }).catch(() => {
+      showToast('Signal generated (clipboard restricted)', '📋');
+    });
+  } else {
+    showToast('Clipboard unavailable', '⚠️');
+  }
+}
 </script>
+
+<div id="toast-container"></div>
 
 </body>
 </html>
