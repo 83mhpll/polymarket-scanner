@@ -564,7 +564,7 @@
       <!-- Widget 1: Win Rate Target -->
       <div class="glass-card">
         <div style="font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase;">Target Win Probability</div>
-        <div class="widget-val" style="color:var(--accent);">87% – 95%</div>
+        <div class="widget-val" style="color:var(--accent);" id="widget-win-range">87% – 99%</div>
         <div class="widget-sub">
           <span class="tag-green">+24.78% Conviction</span> High EV Deals
         </div>
@@ -791,8 +791,12 @@
       <input type="number" id="cfg-min-vol">
     </div>
     <div class="form-group">
-      <label>Spread สูงสุด (MAX_SPREAD) e.g. 0.04</label>
+      <label>Spread สูงสุด (MAX_SPREAD) e.g. 0.10</label>
       <input type="number" step="0.01" id="cfg-max-spread">
+    </div>
+    <div class="form-group">
+      <label>Min Score (0–100) — Smart Scanner quality gate (default: 40)</label>
+      <input type="number" min="0" max="100" step="1" id="cfg-min-score" placeholder="40">
     </div>
     <hr style="border:0; border-top:1px solid var(--border); margin: 20px 0;">
     <h3 style="color:var(--white); margin-bottom:12px; font-size:15px; font-weight:700;">⚡ Trading & Execution Preferences</h3>
@@ -955,6 +959,39 @@ function createCardHTML(o, i, isAlert = false) {
       </svg>
     </div>
 
+    <!-- Phase 3: Mispricing Alert Banner -->
+    ${o.mispricing ? `
+    <div style="margin: 6px 0 8px; padding: 7px 11px; border-radius: 10px;
+      background: ${o.mispricing.signal === 'OVERBOUGHT' ? 'rgba(248,113,113,0.10)' : 'rgba(52,211,153,0.10)'};
+      border: 1px solid ${o.mispricing.signal === 'OVERBOUGHT' ? 'rgba(248,113,113,0.30)' : 'rgba(52,211,153,0.30)'};
+      font-size:11px; display:flex; align-items:flex-start; gap:6px;">
+      <span style="font-size:13px; flex-shrink:0;">${o.mispricing.signal === 'OVERBOUGHT' ? '🔴' : '🟢'}</span>
+      <div>
+        <span style="font-weight:800; color:${o.mispricing.signal === 'OVERBOUGHT' ? '#f87171' : '#34d399'};">
+          ${o.mispricing.signal} (${o.mispricing.confidence})
+        </span>
+        <span style="color:var(--muted); margin-left:4px;">${o.mispricing.suggestion}</span>
+      </div>
+    </div>` : ''}
+
+    <!-- Phase 2: Smart Signal Badges (top 3 signals) -->
+    ${(() => {
+      const sigs = (o.rationale || []).slice(0, 3);
+      if (!sigs.length) return '';
+      const colorMap = { high: 'rgba(163,230,53,0.12)', medium: 'rgba(251,191,36,0.10)', low: 'rgba(148,163,184,0.10)' };
+      const borderMap = { high: 'rgba(163,230,53,0.30)', medium: 'rgba(251,191,36,0.25)', low: 'rgba(148,163,184,0.20)' };
+      const textMap   = { high: '#a3e635', medium: '#fbbf24', low: '#94a3b8' };
+      return `<div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px;">
+        ${sigs.map(s => `
+          <span style="font-size:10px; font-weight:600; padding:3px 8px; border-radius:8px;
+            background:${colorMap[s.strength]}; border:1px solid ${borderMap[s.strength]};
+            color:${textMap[s.strength]}; display:flex; align-items:center; gap:3px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+            title="${escapeHTML(s.text)}">
+            ${s.icon} ${escapeHTML(s.text.length > 42 ? s.text.slice(0, 42) + '…' : s.text)}
+          </span>`).join('')}
+      </div>`;
+    })()}
+
     <!-- Resolution Trust Badge & Liquidity Row -->
     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:auto; padding-top:10px; border-top:1px solid rgba(255,255,255,0.06); font-size:11px;">
       <div style="color:var(--muted); font-weight:600; display:flex; align-items:center; gap:4px;">
@@ -989,6 +1026,7 @@ function renderCards(opps){
 
 
 let sortIdx = 0;
+let minScore = 40; // Minimum quality score gate for Smart Scanner
 
 function applyFilters() {
   if(!allData) return;
@@ -1000,6 +1038,9 @@ function applyFilters() {
   const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
 
   const filtered = allData.opportunities.filter(o => {
+    // ── Score gate (Smart Scanner: high-conviction only) ──
+    if ((o.score || 0) < minScore) return false;
+
     const dEnd = new Date(o.tradingEnd);
     const h = (dEnd - now) / 3600000;
     
@@ -1820,6 +1861,9 @@ async function loadData(manual = false) {
     updateTicker(data.opportunities || []);
     drawCategoryDonut(data.opportunities || []);
 
+    // Sync widget-win-range from live config
+    fetchConfig();
+
     applyFilters();
     startCountdown(120_000); // next auto-refresh in 2 min
 
@@ -1921,7 +1965,6 @@ function tweetMarket(question, outcome, price, url) {
   window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
 }
 
-// Config logic
 async function fetchConfig() {
   try {
     const res = await fetch('/api/config');
@@ -1931,7 +1974,21 @@ async function fetchConfig() {
     if (document.getElementById('cfg-min-liq')) document.getElementById('cfg-min-liq').value = data.MIN_LIQUIDITY;
     if (document.getElementById('cfg-min-vol')) document.getElementById('cfg-min-vol').value = data.MIN_VOL24HR;
     if (document.getElementById('cfg-max-spread')) document.getElementById('cfg-max-spread').value = data.MAX_SPREAD;
+    // Sync widget-win-range with actual config
+    updateWinRangeWidget(data.MIN_PRICE, data.MAX_PRICE);
+    // Load minScore from localStorage
+    const savedScore = parseInt(localStorage.getItem('minScore') || '40', 10);
+    minScore = isNaN(savedScore) ? 40 : savedScore;
+    if (document.getElementById('cfg-min-score')) document.getElementById('cfg-min-score').value = minScore;
   } catch(e){}
+}
+
+function updateWinRangeWidget(minPrice, maxPrice) {
+  const el = document.getElementById('widget-win-range');
+  if (!el) return;
+  const minPct = Math.round((minPrice || 0.87) * 100);
+  const maxPct = Math.round((maxPrice || 0.99) * 100);
+  el.textContent = `${minPct}% – ${maxPct}%`;
 }
 function openConfig() {
   document.getElementById('config-modal').style.display = 'flex';
@@ -1947,13 +2004,22 @@ async function saveConfig() {
     btn.disabled = true;
   }
   
+  const minP = parseFloat(document.getElementById('cfg-min-price')?.value || 0.87);
+  const maxP = parseFloat(document.getElementById('cfg-max-price')?.value || 0.99);
+  const newMinScore = parseInt(document.getElementById('cfg-min-score')?.value || '40', 10);
+
   const payload = {
-    MIN_PRICE: parseFloat(document.getElementById('cfg-min-price')?.value || 0.85),
-    MAX_PRICE: parseFloat(document.getElementById('cfg-max-price')?.value || 0.99),
-    MIN_LIQUIDITY: parseFloat(document.getElementById('cfg-min-liq')?.value || 5000),
-    MIN_VOL24HR: parseFloat(document.getElementById('cfg-min-vol')?.value || 1000),
-    MAX_SPREAD: parseFloat(document.getElementById('cfg-max-spread')?.value || 0.05)
+    MIN_PRICE: minP,
+    MAX_PRICE: maxP,
+    MIN_LIQUIDITY: parseFloat(document.getElementById('cfg-min-liq')?.value || 200),
+    MIN_VOL24HR: parseFloat(document.getElementById('cfg-min-vol')?.value || 0),
+    MAX_SPREAD: parseFloat(document.getElementById('cfg-max-spread')?.value || 0.10)
   };
+
+  // Apply minScore locally immediately
+  minScore = isNaN(newMinScore) ? 40 : Math.max(0, Math.min(100, newMinScore));
+  localStorage.setItem('minScore', minScore);
+  updateWinRangeWidget(minP, maxP);
   
   try {
     const res = await fetch('/api/config', {

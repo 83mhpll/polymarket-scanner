@@ -14,12 +14,12 @@ const __dir = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── Config ───────────────────────────────────────────────────────
 export let CONFIG = {
-  MIN_PRICE: 0.80, // 80% — Win probability floor
-  MAX_PRICE: 0.99, // 99% — Win probability ceiling (allows 95-99% high conviction)
-  MIN_LIQUIDITY: 10, // Very low threshold — filter by score instead
-  MIN_VOL24HR: 0, // Include all volume levels
-  MAX_SPREAD: 0.35, // Wide tolerance — high-price markets have narrow real spread
-  TOP_N: 500, // Return up to 500 opportunities
+  MIN_PRICE: 0.87,  // 87% — Win probability floor (Smart Scanner threshold)
+  MAX_PRICE: 0.99,  // 99% — Win probability ceiling
+  MIN_LIQUIDITY: 200, // Minimum $200 liquidity for meaningful markets
+  MIN_VOL24HR: 0,   // Include all volume levels
+  MAX_SPREAD: 0.10, // Max 10% spread — tighter for high-conviction filter
+  TOP_N: 500,       // Return up to 500 opportunities
 };
 
 export function updateConfig(newCfg) {
@@ -82,33 +82,189 @@ export function getCategory(m) {
   return "Other";
 }
 
-// ─── Score (0-100) ────────────────────────────────────────────────
+// ─── Score (0-100) — Phase 1 Enhanced ────────────────────────────
 export function calcScore(o) {
-  // Price score: reward being close to MAX_PRICE (highest certainty in range)
-  const range = CONFIG.MAX_PRICE - CONFIG.MIN_PRICE || 0.19;
-  const priceScore = Math.min(((o.price - CONFIG.MIN_PRICE) / range) * 30, 30);
-
-  // Liquidity score (log scale)
-  const liqScore = Math.min(
-    (Math.log10(Math.max(o.liquidity, 1) + 1) / Math.log10(500_000)) * 25,
-    25,
-  );
-
-  // Volume score
   const vol = o.vol24hr || 0;
-  const volScore =
-    vol > 0 ? Math.min((Math.log10(vol + 1) / Math.log10(50_000)) * 20, 20) : 0;
 
-  // Spread score: tighter spread = higher score
-  const spreadScore = Math.max(0, 1 - o.spread / CONFIG.MAX_SPREAD) * 15;
-
-  // Urgency bonus: markets ending within 24h get +10
-  const h = o.hoursLeft;
+  // ── Base signals (unchanged weights) ──────────────────────────
+  const range = CONFIG.MAX_PRICE - CONFIG.MIN_PRICE || 0.12;
+  const priceScore   = Math.min(((o.price - CONFIG.MIN_PRICE) / range) * 30, 30);
+  const liqScore     = Math.min((Math.log10(Math.max(o.liquidity, 1) + 1) / Math.log10(500_000)) * 25, 25);
+  const volScore     = vol > 0 ? Math.min((Math.log10(vol + 1) / Math.log10(50_000)) * 20, 20) : 0;
+  const spreadScore  = Math.max(0, 1 - o.spread / CONFIG.MAX_SPREAD) * 15;
+  const h            = o.hoursLeft;
   const urgencyScore = h <= 1 ? 10 : h <= 6 ? 8 : h <= 24 ? 5 : h <= 72 ? 2 : 0;
 
-  return Math.round(
-    priceScore + liqScore + volScore + spreadScore + urgencyScore,
-  );
+  // ── Phase 1: Smart Bonus Signals ──────────────────────────────
+
+  // Momentum Surge: price moved significantly in last 24h (smart money signal)
+  const momentum = o.momentum || 0;
+  const momentumBonus = momentum > 0.05 ? 10
+    : momentum > 0.03 ? 7
+    : momentum > 0.01 ? 3
+    : 0;
+
+  // Volume Anomaly: unusual trading activity relative to pool size
+  const volRatio = o.liquidity > 0 ? vol / o.liquidity : 0;
+  const volumeAnomalyBonus = volRatio > 2 ? 8
+    : volRatio > 1 ? 5
+    : volRatio > 0.5 ? 2
+    : 0;
+
+  // Conviction Zone: 87–93% is the "edge sweet spot" — high confidence, not yet maxed
+  const convictionBonus = o.price >= 0.87 && o.price <= 0.93 ? 5 : 0;
+
+  // Tight Spread Bonus: < 2% spread = excellent orderbook, low slippage
+  const tightSpreadBonus = o.spread < 0.02 ? 5 : o.spread < 0.04 ? 2 : 0;
+
+  // Stale Market Penalty: no volume + far expiry = dead market, not worth entering
+  const stalePenalty = (vol === 0 && h > 72) ? -15
+    : (vol === 0 && h > 24) ? -8
+    : 0;
+
+  return Math.max(0, Math.round(
+    priceScore + liqScore + volScore + spreadScore + urgencyScore +
+    momentumBonus + volumeAnomalyBonus + convictionBonus + tightSpreadBonus + stalePenalty
+  ));
+}
+
+// ─── Phase 2: Rule-based Rationale Generator ─────────────────────
+// Returns array of { icon, text, strength: 'high'|'medium'|'low' }
+export function generateRationale(o) {
+  const signals = [];
+  const vol     = o.vol24hr || 0;
+  const momentum = o.momentum || 0;
+  const h        = o.hoursLeft;
+  const volRatio = o.liquidity > 0 ? vol / o.liquidity : 0;
+
+  // Momentum
+  if (momentum > 0.05)
+    signals.push({ icon: '🚀', text: `Price surged +${(momentum*100).toFixed(1)}% in 24h — strong bullish momentum`, strength: 'high' });
+  else if (momentum > 0.03)
+    signals.push({ icon: '📈', text: `Positive drift +${(momentum*100).toFixed(1)}% — market gaining conviction`, strength: 'medium' });
+  else if (momentum < -0.03)
+    signals.push({ icon: '⚠️', text: `Price dropped ${(momentum*100).toFixed(1)}% — weakening conviction`, strength: 'low' });
+
+  // Volume Anomaly
+  if (volRatio > 2)
+    signals.push({ icon: '🐋', text: `Volume spike ${volRatio.toFixed(1)}× vs pool — institutional activity detected`, strength: 'high' });
+  else if (volRatio > 1)
+    signals.push({ icon: '📊', text: `Above-average volume ${volRatio.toFixed(1)}× — elevated market interest`, strength: 'medium' });
+  else if (vol === 0)
+    signals.push({ icon: '💤', text: 'No 24h volume — illiquid market, enter with caution', strength: 'low' });
+
+  // Spread Quality
+  if (o.spread < 0.02)
+    signals.push({ icon: '✅', text: `Tight spread ${(o.spread*100).toFixed(1)}% — excellent orderbook, minimal slippage`, strength: 'high' });
+  else if (o.spread < 0.05)
+    signals.push({ icon: '🟡', text: `Acceptable spread ${(o.spread*100).toFixed(1)}% — manageable entry cost`, strength: 'medium' });
+  else
+    signals.push({ icon: '⚠️', text: `Wide spread ${(o.spread*100).toFixed(1)}% — expect notable slippage on entry`, strength: 'low' });
+
+  // Time / Urgency
+  if (h <= 1)
+    signals.push({ icon: '⏰', text: `Closing in ${Math.round(h*60)} min — final window to enter`, strength: 'high' });
+  else if (h <= 6)
+    signals.push({ icon: '⚡', text: `${h.toFixed(1)}h remaining — time pressure reduces downside risk`, strength: 'high' });
+  else if (h <= 24)
+    signals.push({ icon: '🕐', text: `${Math.round(h)}h remaining — short-dated position, quick resolution`, strength: 'medium' });
+
+  // Liquidity Depth
+  if (o.liquidity >= 100_000)
+    signals.push({ icon: '💎', text: `Deep liquidity $${(o.liquidity/1000).toFixed(0)}K — safe to size up position`, strength: 'high' });
+  else if (o.liquidity >= 10_000)
+    signals.push({ icon: '💰', text: `Solid liquidity $${(o.liquidity/1000).toFixed(0)}K — adequate for medium size`, strength: 'medium' });
+  else
+    signals.push({ icon: '⚠️', text: `Thin liquidity $${o.liquidity.toFixed(0)} — small position only`, strength: 'low' });
+
+  // Conviction Zone
+  if (o.price >= 0.87 && o.price <= 0.93)
+    signals.push({ icon: '🎯', text: `Price ${(o.price*100).toFixed(0)}% is in the conviction edge zone (87–93%) — optimal EV range`, strength: 'high' });
+  else if (o.price > 0.96)
+    signals.push({ icon: '🔒', text: `Price ${(o.price*100).toFixed(0)}% near certainty — very low ROI upside, minimal risk`, strength: 'medium' });
+
+  // NegRisk Flag
+  if (o.negRisk)
+    signals.push({ icon: '🛡️', text: 'NegRisk market — losses on one outcome partially offset by gains on others', strength: 'medium' });
+
+  return signals;
+}
+
+// ─── Phase 3: Statistical Mispricing Detector ────────────────────
+// Compares implied market probability vs historical base rates
+// Returns null if no significant mispricing detected
+
+const BASE_RATES = {
+  Politics: {
+    // Most competitive elections ~ 50/50, incumbents ~60%
+    election:    { rate: 0.52, label: 'competitive election' },
+    incumbent:   { rate: 0.62, label: 'incumbent advantage' },
+    appointment: { rate: 0.55, label: 'political appointment' },
+    default:     { rate: 0.52, label: 'political event' },
+  },
+  Crypto: {
+    price_above: { rate: 0.50, label: 'crypto price target' },  // pure coin-flip directionally
+    default:     { rate: 0.50, label: 'crypto event' },
+  },
+  Sports: {
+    favorite:    { rate: 0.60, label: 'sports favorite' },
+    default:     { rate: 0.55, label: 'sports outcome' },
+  },
+  Weather: {
+    default:     { rate: 0.45, label: 'weather event' },
+  },
+  Twitter: {
+    default:     { rate: 0.50, label: 'social media event' },
+  },
+  Other: {
+    default:     { rate: 0.50, label: 'event' },
+  },
+};
+
+export function detectMispricing(o) {
+  const text  = (o.question || '').toLowerCase();
+  const price = o.price;
+  const cat   = o.category || 'Other';
+  const catRates = BASE_RATES[cat] || BASE_RATES.Other;
+
+  // Pick sub-type based on question keywords
+  let entry;
+  if (cat === 'Politics') {
+    if (/incumbent|re-elect|re-run/.test(text))           entry = catRates.incumbent;
+    else if (/appoint|nominate|confirm/.test(text))       entry = catRates.appointment;
+    else                                                   entry = catRates.election;
+  } else if (cat === 'Crypto') {
+    if (/above|over|exceed|reach|hit|\$|k\b/.test(text)) entry = catRates.price_above;
+    else                                                   entry = catRates.default;
+  } else if (cat === 'Sports') {
+    if (/favorite|champion|title|defend/.test(text))      entry = catRates.favorite;
+    else                                                   entry = catRates.default;
+  } else {
+    entry = catRates.default;
+  }
+
+  const baseRate = entry.rate;
+  const gap      = price - baseRate;
+  const absGap   = Math.abs(gap);
+
+  // Only flag if gap is meaningful (>15 percentage points)
+  if (absGap < 0.15) return null;
+
+  const confidence = absGap > 0.30 ? 'HIGH' : absGap > 0.20 ? 'MEDIUM' : 'LOW';
+  const signal     = gap > 0 ? 'OVERBOUGHT' : 'UNDERVALUED';
+
+  return {
+    detected:      true,
+    baseRate:      baseRate,
+    baseRateLabel: entry.label,
+    marketPrice:   price,
+    gap:           parseFloat(gap.toFixed(3)),
+    signal,
+    confidence,
+    suggestion: gap > 0
+      ? `Market at ${(price*100).toFixed(0)}% vs ~${(baseRate*100).toFixed(0)}% base rate — may be OVERBOUGHT, consider NO`
+      : `Market at ${(price*100).toFixed(0)}% vs ~${(baseRate*100).toFixed(0)}% base rate — may be UNDERVALUED, YES has edge`,
+  };
 }
 
 // ─── Fetch with Timeout ───────────────────────────────────────────
@@ -338,7 +494,9 @@ export function filterAndScore(markets, maxHours = 0) {
             m.events[0]?.eventMetadata?.context_description) ||
           "",
       };
-      opp.score = calcScore(opp);
+      opp.score      = calcScore(opp);
+      opp.rationale  = generateRationale(opp);
+      opp.mispricing = detectMispricing(opp);
       results.push(opp);
     }
   }
