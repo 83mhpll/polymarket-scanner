@@ -5,6 +5,7 @@ Usage: python3 run_backtest.py --slug "btc-updown-5m-..." --capital 1000
 """
 
 import sys
+import os
 import json
 import requests
 import numpy as np
@@ -13,48 +14,57 @@ import logging
 
 logging.basicConfig(level=logging.WARNING)
 
-POLYTEST_API_KEY = "pt_live_6s4c243a2w5h5i4549220i5u5h6z6z3v"
+POLYTEST_API_KEY = os.environ.get("POLYTEST_API_KEY", "pt_live_6s4c243a2w5h5i4549220i5u5h6z6z3v")
 BASE_URL = "https://api.polytest.io/api/v1"
 HEADERS = {"X-API-Key": POLYTEST_API_KEY}
 
 
 def find_market_by_slug(slug: str):
     """ค้นหา market ด้วย slug จาก PolyTest API"""
-    # ลองทุก market_type ที่รองรับ
-    for market_type in ["5m", "15m"]:
-        res = requests.get(f"{BASE_URL}/markets?market_type={market_type}&limit=200", headers=HEADERS)
-        if res.status_code != 200:
-            continue
-        data = res.json()
-        for m in data.get("markets", []):
-            if m.get("slug") == slug or slug in m.get("slug", ""):
-                return m, market_type
+    try:
+        for market_type in ["5m", "15m"]:
+            res = requests.get(f"{BASE_URL}/markets?market_type={market_type}&limit=200", headers=HEADERS, timeout=8)
+            if res.status_code != 200:
+                continue
+            data = res.json()
+            for m in data.get("markets", []):
+                if m.get("slug") == slug or slug in m.get("slug", ""):
+                    return m, market_type
+    except Exception as e:
+        logging.warning(f"Error fetching market by slug: {e}")
     return None, None
 
 
 def find_similar_markets(slug: str, limit: int = 20):
     """หาตลาดที่คล้ายกัน (coin เดียวกัน) สำหรับ Backtest"""
     coin = "btc"
-    if "eth" in slug.lower():
+    if "eth" in (slug or "").lower():
         coin = "eth"
 
     markets = []
-    for market_type in ["5m", "15m"]:
-        res = requests.get(f"{BASE_URL}/markets?market_type={market_type}&limit={limit}", headers=HEADERS)
-        if res.status_code != 200:
-            continue
-        data = res.json()
-        for m in data.get("markets", []):
-            if m.get("winner") and m.get("coin", "") == coin:
-                markets.append((m, market_type))
+    try:
+        for market_type in ["5m", "15m"]:
+            res = requests.get(f"{BASE_URL}/markets?market_type={market_type}&limit={limit}", headers=HEADERS, timeout=8)
+            if res.status_code != 200:
+                continue
+            data = res.json()
+            for m in data.get("markets", []):
+                if m.get("winner") and m.get("coin", "") == coin:
+                    markets.append((m, market_type))
+    except Exception as e:
+        logging.warning(f"Error finding similar markets: {e}")
     return markets
 
 
 def get_snapshots(market_id: str, limit: int = 300):
-    res = requests.get(f"{BASE_URL}/markets/{market_id}/snapshots?limit={limit}", headers=HEADERS)
-    if res.status_code != 200:
+    try:
+        res = requests.get(f"{BASE_URL}/markets/{market_id}/snapshots?limit={limit}", headers=HEADERS, timeout=8)
+        if res.status_code != 200:
+            return []
+        return res.json().get("snapshots", [])
+    except Exception as e:
+        logging.warning(f"Error fetching snapshots: {e}")
         return []
-    return res.json().get("snapshots", [])
 
 
 def run_backtest(markets_with_type, capital: float):

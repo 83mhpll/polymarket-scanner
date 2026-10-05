@@ -71,42 +71,53 @@ class PolyTestFeed:
     def get_resolved_markets(self, market_type: str = "5m", limit: int = 50) -> List[MarketResult]:
         """ดึงตลาดที่ปิดแล้ว (มี winner) มาใช้ Backtest"""
         url = f"{BASE_URL}/markets?market_type={market_type}&limit={limit}"
-        res = self.session.get(url)
-        data = res.json()
-        
-        markets = []
-        for m in data.get("markets", []):
-            if m.get("winner"):  # กรองเฉพาะตลาดที่ resolve แล้ว
-                markets.append(MarketResult(
-                    market_id=m["market_id"],
-                    slug=m["slug"],
-                    coin=m.get("coin", "btc"),
-                    market_type=m["market_type"],
-                    start_time=m["start_time"],
-                    end_time=m["end_time"],
-                    price_start=m.get("price_start", 0),
-                    price_end=m.get("price_end"),
-                    winner=m["winner"],
-                    final_volume=m.get("final_volume", 0)
-                ))
-        logging.info(f"Found {len(markets)} resolved {market_type} markets")
-        return markets
+        try:
+            res = self.session.get(url, timeout=10)
+            if res.status_code != 200:
+                return []
+            data = res.json()
+            
+            markets = []
+            for m in data.get("markets", []):
+                if m.get("winner"):  # กรองเฉพาะตลาดที่ resolve แล้ว
+                    markets.append(MarketResult(
+                        market_id=m["market_id"],
+                        slug=m["slug"],
+                        coin=m.get("coin", "btc"),
+                        market_type=m["market_type"],
+                        start_time=m["start_time"],
+                        end_time=m["end_time"],
+                        price_start=m.get("price_start", 0),
+                        price_end=m.get("price_end"),
+                        winner=m["winner"],
+                        final_volume=m.get("final_volume", 0)
+                    ))
+            logging.info(f"Found {len(markets)} resolved {market_type} markets")
+            return markets
+        except Exception as e:
+            print(f"⚠️  Network note: Unable to connect to PolyTest API ({e})")
+            return []
 
     def get_snapshots(self, market_id: str, limit: int = 500) -> List[PriceSnapshot]:
         """ดึง Price Snapshots ย้อนหลัง (Millisecond Resolution)"""
         url = f"{BASE_URL}/markets/{market_id}/snapshots?limit={limit}"
-        res = self.session.get(url)
-        data = res.json()
-        
-        snaps = []
-        for s in data.get("snapshots", []):
-            snaps.append(PriceSnapshot(
-                timestamp=s["time"],
-                spot_price=s.get("spot_price", 0),
-                price_up=float(s["price_up"] or 0.5),
-                price_down=float(s["price_down"] or 0.5)
-            ))
-        return snaps
+        try:
+            res = self.session.get(url, timeout=10)
+            if res.status_code != 200:
+                return []
+            data = res.json()
+            
+            snaps = []
+            for s in data.get("snapshots", []):
+                snaps.append(PriceSnapshot(
+                    timestamp=s["time"],
+                    spot_price=s.get("spot_price", 0),
+                    price_up=float(s["price_up"] or 0.5),
+                    price_down=float(s["price_down"] or 0.5)
+                ))
+            return snaps
+        except Exception as e:
+            return []
 
 
 # ==========================================
