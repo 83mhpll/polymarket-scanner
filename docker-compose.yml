@@ -1,0 +1,12 @@
+services:
+  polymarket-scanner:
+    build: .
+    container_name: polymarket-scanner
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    volumes:
+      - ./backtest.json:/app/backtest.json
+      - ./watchlist.json:/app/watchlist.json
