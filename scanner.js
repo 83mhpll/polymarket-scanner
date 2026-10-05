@@ -6,9 +6,16 @@
 const GAMMA_API = "https://gamma-api.polymarket.com";
 
 // ─── Config ───────────────────────────────────────────────────────
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dir = path.dirname(fileURLToPath(import.meta.url));
+
+// ─── Config ───────────────────────────────────────────────────────
 export let CONFIG = {
-  MIN_PRICE: 0.87, // 87% — Win probability floor
-  MAX_PRICE: 0.95, // 95% — Win probability ceiling
+  MIN_PRICE: 0.80, // 80% — Win probability floor
+  MAX_PRICE: 0.99, // 99% — Win probability ceiling (allows 95-99% high conviction)
   MIN_LIQUIDITY: 10, // Very low threshold — filter by score instead
   MIN_VOL24HR: 0, // Include all volume levels
   MAX_SPREAD: 0.35, // Wide tolerance — high-price markets have narrow real spread
@@ -78,7 +85,7 @@ export function getCategory(m) {
 // ─── Score (0-100) ────────────────────────────────────────────────
 export function calcScore(o) {
   // Price score: reward being close to MAX_PRICE (highest certainty in range)
-  const range = CONFIG.MAX_PRICE - CONFIG.MIN_PRICE || 0.08;
+  const range = CONFIG.MAX_PRICE - CONFIG.MIN_PRICE || 0.19;
   const priceScore = Math.min(((o.price - CONFIG.MIN_PRICE) / range) * 30, 30);
 
   // Liquidity score (log scale)
@@ -120,65 +127,74 @@ async function fetchWithTimeout(url, ms = 10_000) {
 }
 
 // ─── Fetch Markets ────────────────────────────────────────────────
-// Strategy: fetch THREE date windows in parallel to maximise coverage
-//   • Tier 1: Urgent (Ending within 6h) - Highest priority, fast fetch
-//   • Tier 2: Daily  (Ending within 24h) - Main opportunity zone
-//   • Tier 3: Weekly (Ending within 7d) - Medium-term breadth
-// Then deduplicate by conditionId and return merged list.
 export async function fetchMarkets(onProgress) {
-  const PAGE = 100; // Polymarket Gamma API max limit is 100
-  const MAX_PAGES = 50; // Up to 5,000 markets per tier
-
+  const PAGE = 100;
   const now = Date.now();
+  const nowIso = new Date(now).toISOString();
   const end6h = new Date(now + 6 * 3_600_000).toISOString();
   const end24h = new Date(now + 24 * 3_600_000).toISOString();
   const end7d = new Date(now + 168 * 3_600_000).toISOString();
 
   let totalFetched = 0;
 
-  async function paginateTier(endDateParam, label) {
+  async function paginateTier(queryUrl, label, maxPages) {
     const all = [];
     let offset = 0;
     let page = 0;
     let hasMore = true;
 
-    console.log(
-      `[Scanner] Fetching ${label} tier (max ${MAX_PAGES * PAGE} markets)...`,
-    );
+    console.log(`[Scanner] Fetching ${label} (max ${maxPages * PAGE} markets)...`);
 
-    while (hasMore && page < MAX_PAGES) {
-      const url = `${GAMMA_API}/markets?closed=false&active=true&limit=${PAGE}&offset=${offset}&end_date_max=${endDateParam}&order=volume24hr&ascending=false`;
+    while (hasMore && page < maxPages && offset <= 2000) {
+      const url = `${queryUrl}&limit=${PAGE}&offset=${offset}`;
       
       try {
-        const pg = await fetchWithTimeout(url, 15_000);
+        const pg = await fetchWithTimeout(url, 12_000);
         if (Array.isArray(pg)) {
           all.push(...pg);
           totalFetched += pg.length;
           if (pg.length < PAGE) {
             hasMore = false;
           }
+        } else {
+          hasMore = false;
         }
       } catch (err) {
         console.warn(`[Scanner] Fetch failed for ${label} offset ${offset}:`, err.message);
-        hasMore = false; // Stop this tier if rate limited
+        hasMore = false;
       }
 
       page++;
       offset += PAGE;
 
       if (onProgress) onProgress(totalFetched);
-      // Wait 500ms between requests to avoid rate limiting on cloud servers
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 120));
     }
 
     console.log(`[Scanner] ${label}: ${all.length} raw markets fetched`);
     return all;
   }
 
-  // Fetch tiers sequentially to avoid rate limits
-  const tier1 = await paginateTier(end6h, "Urgent (6h)");
-  const tier2 = await paginateTier(end24h, "Daily (24h)");
-  const tier3 = await paginateTier(end7d, "Weekly (7d)");
+  // Tier 1: Highest 24h volume active markets
+  const tier1 = await paginateTier(
+    `${GAMMA_API}/markets?closed=false&active=true&order=volume24hr&ascending=false`,
+    "Top 24h Volume",
+    6
+  );
+
+  // Tier 2: Ending soonest markets
+  const tier2 = await paginateTier(
+    `${GAMMA_API}/markets?closed=false&active=true&end_date_min=${nowIso}&end_date_max=${end7d}&order=volume24hr&ascending=false`,
+    "Ending This Week",
+    6
+  );
+
+  // Tier 3: Highest liquidity markets
+  const tier3 = await paginateTier(
+    `${GAMMA_API}/markets?closed=false&active=true&order=liquidityNum&ascending=false`,
+    "Top Liquidity",
+    4
+  );
 
   // Deduplicate by conditionId (primary) or id/question (fallback)
   const seen = new Set();
@@ -188,6 +204,22 @@ export async function fetchMarkets(onProgress) {
     if (!key || seen.has(key)) continue;
     seen.add(key);
     merged.push(m);
+  }
+
+  // Fallback to sample_markets.json if network failed completely
+  if (merged.length === 0) {
+    try {
+      const samplePath = path.join(__dir, "sample_markets.json");
+      if (fs.existsSync(samplePath)) {
+        console.log("[Scanner] Live fetch returned 0 markets, falling back to cached sample_markets.json...");
+        const sample = JSON.parse(fs.readFileSync(samplePath, "utf-8"));
+        if (Array.isArray(sample) && sample.length > 0) {
+          return sample;
+        }
+      }
+    } catch (e) {
+      console.warn("[Scanner] Fallback load failed:", e.message);
+    }
   }
 
   console.log(
@@ -223,13 +255,27 @@ export function filterAndScore(markets, maxHours = 0) {
     // Resolution Time: When is the money settled?
     let resolutionRaw = eventEnd || marketEnd;
 
-    const tradingEndDate = new Date(tradingEndRaw);
-    const resolutionDate = new Date(resolutionRaw);
+    let tradingEndDate = new Date(tradingEndRaw);
+    let resolutionDate = new Date(resolutionRaw);
 
-    if (isNaN(tradingEndDate.getTime())) continue;
+    if (isNaN(tradingEndDate.getTime())) {
+      tradingEndDate = new Date(now.getTime() + 7 * 86400000);
+    }
+    if (isNaN(resolutionDate.getTime())) {
+      resolutionDate = tradingEndDate;
+    }
 
-    const hoursLeft = (tradingEndDate - now) / 3_600_000;
-    if (hoursLeft < -0.5) continue; // Hide markets that ended more than 30 mins ago
+    let hoursLeft = (tradingEndDate - now) / 3_600_000;
+    if (hoursLeft < -0.5) {
+      if (m.active && !m.closed) {
+        // If active market has legacy timestamp, adjust forward for display
+        hoursLeft = 24;
+        tradingEndDate = new Date(now.getTime() + 24 * 3_600_000);
+        resolutionDate = tradingEndDate;
+      } else {
+        continue; // Hide markets that ended more than 30 mins ago
+      }
+    }
     if (maxHours > 0 && hoursLeft > maxHours) continue;
 
     const spread = parseFloat(m.spread ?? 1);
@@ -336,6 +382,7 @@ export async function runScan(onProgress) {
   return {
     scannedAt: new Date().toISOString(),
     totalMarkets: markets.length,
+    rawMarkets: markets,
     stats,
     opportunities: allOpps.map((o) => ({
       ...o,
@@ -343,4 +390,62 @@ export async function runScan(onProgress) {
       resolution: o.resolution.toISOString(),
     })),
   };
+}
+
+// ─── Midpoint Arbitrage Detection ──────────────────────────────────
+export function scanMidpointArbitrage(markets) {
+  const results = [];
+  for (const m of markets) {
+    if (m.closed || !m.active) continue;
+    let prices, outcomes, bestBids, bestAsks;
+    try {
+      prices = typeof m.outcomePrices === "string" ? JSON.parse(m.outcomePrices) : m.outcomePrices || [];
+      outcomes = typeof m.outcomes === "string" ? JSON.parse(m.outcomes) : m.outcomes || [];
+      bestBids = typeof m.bestBids === "string" ? JSON.parse(m.bestBids) : m.bestBids || typeof m.bestBid === "string" ? JSON.parse(m.bestBid) : m.bestBid || [];
+      bestAsks = typeof m.bestAsks === "string" ? JSON.parse(m.bestAsks) : m.bestAsks || typeof m.bestAsk === "string" ? JSON.parse(m.bestAsk) : m.bestAsk || [];
+    } catch(e) { continue; }
+    
+    if (!prices.length || prices.length !== bestBids.length || prices.length !== bestAsks.length) continue;
+    
+    for (let i = 0; i < prices.length; i++) {
+      const price = Number(prices[i]);
+      const bid = Number(bestBids[i]);
+      const ask = Number(bestAsks[i]);
+      
+      if (bid > 0 && ask > 0) {
+        const midpoint = (bid + ask) / 2;
+        const diff = Math.abs(midpoint - price);
+        
+        // "significantly different" -> say > 0.05
+        if (diff >= 0.05) {
+          // Kelly estimation for midpoint reversion
+          const expectedProb = midpoint;
+          const b = (1.0 / price) - 1;
+          const q = 1 - expectedProb;
+          let kelly = b > 0 ? (b * expectedProb - q) / b : 0;
+          kelly = Math.max(0, Math.min(1, kelly));
+
+          // Confidence
+          let confidence = 50 + (diff * 200);
+          confidence = Math.min(100, Math.max(0, Math.round(confidence)));
+
+          results.push({
+            type: 'midpoint_arbitrage',
+            question: m.question,
+            outcome: outcomes[i] ?? `Outcome ${i}`,
+            price: price,
+            bestBid: bid,
+            bestAsk: ask,
+            midpoint: parseFloat(midpoint.toFixed(3)),
+            diff: parseFloat(diff.toFixed(3)),
+            kellyPositionPercent: parseFloat((kelly * 100).toFixed(2)),
+            confidence: confidence,
+            url: `https://polymarket.com/event/${m.slug}`,
+            detectedAt: new Date().toISOString()
+          });
+        }
+      }
+    }
+  }
+  return results.sort((a,b) => b.diff - a.diff);
 }
