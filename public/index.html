@@ -502,12 +502,16 @@
   .modal-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(4, 6, 12, 0.85); backdrop-filter: blur(20px);
-    display: none; align-items: center; justify-content: center; z-index: 9999;
+    display: none; align-items: center; justify-content: center; z-index: 10000;
+  }
+  #order-modal {
+    z-index: 10050 !important;
   }
   .modal {
     background: var(--surface-solid); border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: var(--radius-xl); padding: 30px; width: 92%; max-width: 480px;
     box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85);
+    position: relative;
   }
   .modal h2 { margin-bottom: 20px; font-family: 'Outfit', sans-serif; font-size: 20px; color: #ffffff; font-weight: 800; }
   .form-group { margin-bottom: 16px; }
@@ -570,44 +574,47 @@
 
     <nav class="sidebar-nav">
       <div class="nav-section-title">Core Views</div>
-      <a class="nav-item active" onclick="location.hash='#dashboard'">
+      <a class="nav-item active" onclick="setSidebarActive(this); closeAllModals();">
         <div class="nav-icon">🌐</div> All Markets
       </a>
-      <a class="nav-item" onclick="openQuantModal(); switchQuantTab('netarb', document.getElementById('qtab-netarb'));">
+      <a class="nav-item" onclick="setSidebarActive(this); navToQuant('netarb');">
         <div class="nav-icon">⚡</div> Cross-Market Arb
       </a>
-      <a class="nav-item" onclick="openQuantModal(); switchQuantTab('smartmoney', document.getElementById('qtab-smartmoney'));">
+      <a class="nav-item" onclick="setSidebarActive(this); navToQuant('manifold');">
+        <div class="nav-icon">🌐</div> Manifold Arb
+      </a>
+      <a class="nav-item" onclick="setSidebarActive(this); navToQuant('smartmoney');">
         <div class="nav-icon">🐋</div> Smart Money
       </a>
-      <a class="nav-item" onclick="openQuantModal(); switchQuantTab('aimodel', document.getElementById('qtab-aimodel'));">
+      <a class="nav-item" onclick="setSidebarActive(this); navToQuant('aimodel');">
         <div class="nav-icon">🧠</div> AI Mispricing
       </a>
-      <a class="nav-item" onclick="openBacktest()">
+      <a class="nav-item" onclick="setSidebarActive(this); openBacktest();">
         <div class="nav-icon">📊</div> Portfolio & Orders
       </a>
-      <a class="nav-item" onclick="openWatchlist()">
+      <a class="nav-item" onclick="setSidebarActive(this); openWatchlist();">
         <div class="nav-icon">⭐</div> Watchlist
       </a>
 
       <div class="nav-section-title">Quant Strategies</div>
-      <a class="nav-item" onclick="openQuantModal(); switchQuantTab('1c', document.getElementById('qtab-1c'));">
+      <a class="nav-item" onclick="setSidebarActive(this); navToQuant('1c');">
         <div class="nav-icon">🎯</div> 1c Dust Sweeper
       </a>
-      <a class="nav-item" onclick="openQuantModal(); switchQuantTab('negrisk', document.getElementById('qtab-negrisk'));">
+      <a class="nav-item" onclick="setSidebarActive(this); navToQuant('negrisk');">
         <div class="nav-icon">⚖️</div> NegRisk Multi-Arb
       </a>
-      <a class="nav-item" onclick="openQuantModal(); switchQuantTab('whale', document.getElementById('qtab-whale'));">
+      <a class="nav-item" onclick="setSidebarActive(this); navToQuant('whale');">
         <div class="nav-icon">🌊</div> Whale Movements
       </a>
 
       <div class="nav-section-title">System & Settings</div>
-      <a class="nav-item" onclick="openAlerts()">
+      <a class="nav-item" onclick="setSidebarActive(this); openAlerts();">
         <div class="nav-icon">🔔</div> High Alerts
       </a>
-      <a class="nav-item" onclick="openConfig()">
+      <a class="nav-item" onclick="setSidebarActive(this); openConfig();">
         <div class="nav-icon">⚙️</div> Settings
       </a>
-      <a class="nav-item" onclick="loadData(true)">
+      <a class="nav-item" onclick="loadData(true);">
         <div class="nav-icon">🔄</div> Refresh Feed
       </a>
     </nav>
@@ -1250,12 +1257,12 @@ function createCardHTML(o, i, isAlert = false) {
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; flex:1;">
         <button class="btn-bet yes" 
                 style="${isYesTarget ? 'box-shadow: 0 0 18px rgba(163,230,53,0.45); border: 2px solid rgba(255,255,255,0.9);' : 'opacity:0.85;'}"
-                onclick="openOrderModal('${escapeJSArg(o.question)}', 'YES', ${o.price}, '${escapeJSArg(o.url)}', '${escapeJSArg(o.tokenID || '')}')">
+                onclick="openOrderModalByIndex(${i}, 'YES')">
           🟢 Buy YES ${centYes}¢ ${isYesTarget ? '🔥' : ''}
         </button>
         <button class="btn-bet no" 
                 style="${!isYesTarget ? 'box-shadow: 0 0 18px rgba(248,113,113,0.45); border: 2px solid rgba(255,255,255,0.9);' : 'opacity:0.85;'}"
-                onclick="openOrderModal('${escapeJSArg(o.question)}', 'NO', ${(1 - o.price).toFixed(3)}, '${escapeJSArg(o.url)}', '${escapeJSArg(o.tokenID || '')}')">
+                onclick="openOrderModalByIndex(${i}, 'NO')">
           🔴 Buy NO ${centNo}¢ ${!isYesTarget ? '🔥' : ''}
         </button>
       </div>
@@ -1350,7 +1357,32 @@ function setCatFilter(cat, btn){
 let quantData = null;
 let currentQuantSubTab = 'netarb';
 
+function setSidebarActive(el) {
+  document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => item.classList.remove('active'));
+  if (el) el.classList.add('active');
+}
+
+function closeAllModals() {
+  const modalIds = ['order-modal', 'quant-modal', 'config-modal', 'bt-modal', 'bt-result-modal', 'watchlist-modal', 'alert-modal'];
+  modalIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  if (typeof portfolioInterval !== 'undefined') clearInterval(portfolioInterval);
+}
+
+function navToQuant(tab) {
+  closeAllModals();
+  openQuantModal();
+  switchQuantTab(tab);
+}
+
+function safeArg(str) {
+  return encodeURIComponent(String(str || ''));
+}
+
 async function openQuantModal() {
+  closeAllModals();
   document.getElementById('quant-modal').style.display = 'flex';
   await loadQuantData();
 }
@@ -1373,7 +1405,8 @@ async function loadQuantData() {
 function switchQuantTab(tab, btn) {
   currentQuantSubTab = tab;
   document.querySelectorAll('#quant-modal .filter-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  const targetBtn = btn || document.getElementById(`qtab-${tab}`);
+  if (targetBtn) targetBtn.classList.add('active');
   renderQuantTab();
 }
 
@@ -1425,7 +1458,7 @@ function renderQuantTab() {
               </td>
               <td><b>$${item.strategy.combinedCost.toFixed(2)}</b><br><small style="color:var(--muted)">Fee+Slip: -$${(item.strategy.takerFees + item.strategy.estimatedSlippage).toFixed(3)}</small></td>
               <td><span class="bt-win" style="font-size:14px; font-weight:800;">+${item.strategy.netRoiPercent}%</span></td>
-              <td><button class="btn-bet yes" style="padding:5px 12px; font-size:12px;" onclick="openOrderModal('${escapeJSArg(item.marketTopic)}', '${escapeJSArg(item.strategy.leg1.action)}', ${item.strategy.leg1.price}, '${escapeJSArg(item.strategy.leg1.url)}')">⚡ Execute Arb</button></td>
+              <td><button class="btn-bet yes" style="padding:5px 12px; font-size:12px;" onclick="openOrderModal('${safeArg(item.marketTopic)}', '${safeArg(item.strategy.leg1.action)}', ${item.strategy.leg1.price}, '${safeArg(item.strategy.leg1.url)}')">⚡ Execute Arb</button></td>
             </tr>
           `).join('')}
         </tbody>
@@ -1502,7 +1535,7 @@ function renderQuantTab() {
               </td>
               <td>
                 <div style="display:flex; gap:6px;">
-                  <button class="btn-bet yes" style="padding:4px 10px; font-size:11px;" onclick="openOrderModal('${escapeJSArg(item.polymarket.question)}', 'YES', ${item.polymarket.yesPrice}, '${escapeJSArg(item.polymarket.url)}')">⚡ Trade</button>
+                  <button class="btn-bet yes" style="padding:4px 10px; font-size:11px;" onclick="openOrderModal('${safeArg(item.polymarket.question)}', 'YES', ${item.polymarket.yesPrice}, '${safeArg(item.polymarket.url)}')">⚡ Trade</button>
                   <a href="${item.manifold.url}" target="_blank" class="btn btn-secondary" style="padding:4px 8px; font-size:11px;" title="View on Manifold">🌐</a>
                 </div>
               </td>
@@ -1556,7 +1589,7 @@ function renderQuantTab() {
               </td>
               <td>
                 ${w.recentAccumulation ? `
-                  <button class="btn-bet yes" style="padding:5px 10px; font-size:12px;" onclick="openOrderModal('${escapeJSArg(w.recentAccumulation.market)}', '${escapeJSArg(w.recentAccumulation.side)}', ${w.recentAccumulation.entryPrice}, '')">🐋 Follow</button>
+                  <button class="btn-bet yes" style="padding:5px 10px; font-size:12px;" onclick="openOrderModal('${safeArg(w.recentAccumulation.market)}', '${safeArg(w.recentAccumulation.side)}', ${w.recentAccumulation.entryPrice}, '')">🐋 Follow</button>
                 ` : '—'}
               </td>
             </tr>
@@ -1603,7 +1636,7 @@ function renderQuantTab() {
               <td style="font-size:11px; color:var(--muted); max-width:240px;">
                 ${item.evidence ? item.evidence.map(e => `• ${escapeHTML(e)}`).join('<br>') : ''}
               </td>
-              <td><button class="btn-bet yes" style="padding:5px 10px; font-size:12px;" onclick="openOrderModal('${escapeJSArg(item.question)}', 'YES', ${item.marketProbability}, '${escapeJSArg(item.url)}')">🧠 Trade Edge</button></td>
+              <td><button class="btn-bet yes" style="padding:5px 10px; font-size:12px;" onclick="openOrderModal('${safeArg(item.question)}', 'YES', ${item.marketProbability}, '${safeArg(item.url)}')">🧠 Trade Edge</button></td>
             </tr>
           `).join('')}
         </tbody>
@@ -1646,7 +1679,7 @@ function renderQuantTab() {
               <td><b>$${item.price}</b> (${(item.price*100).toFixed(0)}¢)</td>
               <td><span class="bt-win">+${item.expectedRoi}%</span></td>
               <td><b style="color:var(--green)">+$${item.ev}</b></td>
-              <td><button class="btn-bet no" style="padding:4px 10px; font-size:12px;" onclick="openOrderModal('${escapeJSArg(item.question)}', '${escapeJSArg(item.outcome)}', ${item.price}, '${escapeJSArg(item.url)}')">⚡ Snipe Share</button></td>
+              <td><button class="btn-bet no" style="padding:4px 10px; font-size:12px;" onclick="openOrderModal('${safeArg(item.question)}', '${safeArg(item.outcome)}', ${item.price}, '${safeArg(item.url)}')">⚡ Snipe Share</button></td>
             </tr>
           `).join('')}
         </tbody>
@@ -1689,7 +1722,7 @@ function renderQuantTab() {
               <td>${item.outcomeCount} ตัวเลือก</td>
               <td><b>$${item.sumYesPrice}</b> (จ่ายรวม)</td>
               <td><span class="bt-win" style="font-size:14px;">+${item.profitPercent}%</span> (+$${item.profitUsd})</td>
-              <td><button class="btn-bet yes" style="padding:4px 10px; font-size:12px;" onclick="openOrderModal('${escapeJSArg(item.title)}', 'All YES Options', ${item.sumYesPrice}, '${escapeJSArg(item.url)}')">⚖️ Buy Arbitrage</button></td>
+              <td><button class="btn-bet yes" style="padding:4px 10px; font-size:12px;" onclick="openOrderModal('${safeArg(item.title)}', 'All YES Options', ${item.sumYesPrice}, '${safeArg(item.url)}')">⚖️ Buy Arbitrage</button></td>
             </tr>
           `).join('')}
         </tbody>
@@ -1731,7 +1764,7 @@ function renderQuantTab() {
               </td>
               <td><span class="bt-open" style="font-size:14px;">${item.lagSpreadPercent}%</span></td>
               <td><span class="bt-win">${item.expectedAdjustment}</span></td>
-              <td><button class="btn-bet yes" style="padding:4px 10px; font-size:12px;" onclick="openOrderModal('${escapeJSArg(item.childQuestion)}', 'Lag Hedge', ${item.childPrice}, '${escapeJSArg(item.url)}')">🔗 Trade Lag</button></td>
+              <td><button class="btn-bet yes" style="padding:4px 10px; font-size:12px;" onclick="openOrderModal('${safeArg(item.childQuestion)}', 'Lag Hedge', ${item.childPrice}, '${safeArg(item.url)}')">🔗 Trade Lag</button></td>
             </tr>
           `).join('')}
         </tbody>
@@ -1775,7 +1808,7 @@ function renderQuantTab() {
               <td><b>${item.pricePercent}%</b> ($${item.currentPrice.toFixed(2)})</td>
               <td><span style="color:#ffffff; font-weight:700;">$${item.vol24hrFormatted}</span></td>
               <td><span class="bt-win" style="font-size:13px; background:rgba(56,189,248,0.2); color:var(--accent-cyan); border-color:rgba(56,189,248,0.4);">${item.signalType} (${item.whaleScore}%)</span></td>
-              <td><button class="btn-bet yes" style="padding:4px 10px; font-size:12px;" onclick="openOrderModal('${escapeJSArg(item.title)}', '${escapeJSArg(item.targetOutcome)}', ${item.currentPrice}, '${escapeJSArg(item.url)}')">🐋 Follow Whale</button></td>
+              <td><button class="btn-bet yes" style="padding:4px 10px; font-size:12px;" onclick="openOrderModal('${safeArg(item.title)}', '${safeArg(item.targetOutcome)}', ${item.currentPrice}, '${safeArg(item.url)}')">🐋 Follow Whale</button></td>
             </tr>
           `).join('')}
         </tbody>
@@ -1791,7 +1824,7 @@ let currentOrderType = 'market';
 
 async function connectWallet() {
   if (typeof window.ethereum === 'undefined') {
-    alert('🦊 MetaMask / Web3 Wallet not detected. Please install MetaMask or Rabby browser extension.');
+    showToast('MetaMask / Web3 Wallet not detected. Paper Trading mode active.', '🦊');
     return;
   }
   try {
@@ -1818,9 +1851,10 @@ async function connectWallet() {
           console.warn('Network switch error:', switchErr);
         }
       }
+      showToast(`Connected: ${shortAddr}`, '🦊');
     }
   } catch (err) {
-    alert('🚨 Wallet connection failed: ' + err.message);
+    showToast('Wallet connection cancelled or failed', '⚠️');
   }
 }
 
@@ -1901,7 +1935,27 @@ function drawOrderShareChart(price) {
   ctx.stroke();
 }
 
+function openOrderModalByIndex(idx, outcomeSide = 'YES') {
+  const opp = currentOpps[idx];
+  if (!opp) return;
+  const p = parseFloat(opp.price);
+  const isYes = outcomeSide.toUpperCase() === 'YES';
+  const targetPrice = isYes ? p : parseFloat((1 - p).toFixed(3));
+  openOrderModal(opp.question, outcomeSide, targetPrice, opp.url, opp.tokenID || '');
+}
+
 function openOrderModal(question, outcome, price, marketUrl, tokenID = '') {
+  // If arguments were URI encoded, decode them safely
+  if (typeof question === 'string') {
+    try { question = decodeURIComponent(question); } catch(e){}
+  }
+  if (typeof marketUrl === 'string') {
+    try { marketUrl = decodeURIComponent(marketUrl); } catch(e){}
+  }
+
+  // Close any background modals so order modal takes center stage
+  closeAllModals();
+
   const normOutcome = outcome.toUpperCase() === 'NO' ? 'NO' : 'YES';
   const p = parseFloat(price);
   currentActiveOrder = { 
@@ -1976,8 +2030,25 @@ function switchOrderOutcome(newOutcome) {
 }
 
 function closeOrderModal() {
-  document.getElementById('order-modal').style.display = 'none';
+  const m = document.getElementById('order-modal');
+  if (m) m.style.display = 'none';
+  clearTimeout(clobDebounceTid);
 }
+
+// Global Keyboard Shortcuts (Esc to close any modal, Cmd+K to search)
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeAllModals();
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.select();
+    }
+  }
+});
 
 function setOrderAmount(amt, btn) {
   document.querySelectorAll('#order-modal .pill-tab').forEach(b => b.classList.remove('active'));
@@ -2086,12 +2157,12 @@ async function submitOrderTicket() {
   const btn = document.getElementById('order-submit-btn');
 
   if (!amt || amt <= 0) {
-    alert('Please enter a valid investment amount.');
+    showToast('Please enter a valid investment amount.', '⚠️');
     return;
   }
 
   btn.disabled = true;
-  btn.textContent = '⏳ Submitting to Polymarket Relayer...';
+  btn.textContent = '⏳ Submitting Order...';
 
   try {
     if (mode === 'web3') {
@@ -2110,26 +2181,28 @@ async function submitOrderTicket() {
         outcome: currentActiveOrder.outcome,
         price: currentActiveOrder.price,
         size: amt,
+        amount: amt,
         type: 'BUY',
         wallet: userWalletAddress,
         note: 'Web3 Wallet Direct Sign (EIP-712 / Polygon)'
       });
 
-      alert(`🎉 Trade Executed Successfully!\n\n📋 Market: ${currentActiveOrder.question}\n🎯 Position: ${currentActiveOrder.outcome} (${(currentActiveOrder.price*100).toFixed(0)}¢)\n💰 Amount: $${amt} USDC (${(amt/currentActiveOrder.price).toFixed(1)} Shares)\n⛽ Gas Fee: $0.00 (Sponsored via Relayer)\n🏷️ Builder Attribution: Verified\n\nSubmitted to Polymarket CLOB via EIP-712 Order!`);
+      showToast(`Executed Web3 Order: $${amt} on ${currentActiveOrder.outcome}`, '🎉');
     } else {
       await logTradeDirect({
         question: currentActiveOrder.question,
         outcome: currentActiveOrder.outcome,
         price: currentActiveOrder.price,
         size: amt,
+        amount: amt,
         type: 'BUY',
         note: 'Paper Trade Simulation'
       });
-      alert(`📝 Recorded Paper Trade Successfully!\n\nMarket: ${currentActiveOrder.question}\nPosition: ${currentActiveOrder.outcome}\nAmount: $${amt} USDC`);
+      showToast(`Recorded $${amt} Sim Trade on ${currentActiveOrder.outcome}`, '📝');
     }
     closeOrderModal();
   } catch (err) {
-    alert('🚨 Order submission error: ' + err.message);
+    showToast('Order submission error: ' + err.message, '🚨');
   } finally {
     btn.disabled = false;
     btn.textContent = '⚡ Confirm & Submit Order';
@@ -2456,44 +2529,18 @@ async function logTrade(idx) {
       body: JSON.stringify(opp)
     });
     if(res.ok) {
-      alert('✅ Recorded trade to Backtest Log successfully!');
+      showToast('Recorded trade to Backtest Log successfully!', '✅');
     }
   } catch(e) {
-    alert('🚨 Error saving trade!');
+    showToast('Error saving trade: ' + e.message, '🚨');
   }
 }
 
 // Live Trade logic
 async function liveTrade(idx) {
   const opp = currentOpps[idx];
-  const size = prompt(`⚡ LIVE TRADE: How many shares of [${opp.outcome}] do you want to buy?\n\nCurrent Price: $${(opp.price).toFixed(3)}\nMarket: ${opp.question}\n\nNote: Requires API Credentials in Config.`);
-  if(!size || isNaN(size) || size <= 0) return;
-  
-  if(!confirm(`You are about to BUY ${size} shares of ${opp.outcome} at $${opp.price}.\n\nTotal Cost: ~$${(size * opp.price).toFixed(2)}\nProceed?`)) return;
-
-  try {
-    const res = await fetch('/api/trade', {
-      method: 'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        tokenID: opp.tokenID, // Requires server to supply clobTokenIds!
-        price: opp.price,
-        size: parseFloat(size),
-        side: 'BUY',
-        slug: opp.slug,
-        outcomeIdx: opp.outcomeIdx
-      })
-    });
-    
-    const data = await res.json();
-    if(res.ok && data.success) {
-      alert('✅ Order Placed Successfully via Polymarket Builder API!');
-    } else {
-      alert('🚨 Order Failed: ' + (data.error || 'Check your API credentials.'));
-    }
-  } catch(e) {
-    alert('🚨 Server Error during Live Trade.');
-  }
+  if (!opp) return;
+  openOrderModalByIndex(idx, opp.outcome || 'YES');
 }
 
 let portfolioInterval;
@@ -2628,7 +2675,7 @@ async function openBacktest(silent = false) {
 }
 
 function exportCSV() {
-  if(!window.currentLogs || window.currentLogs.length === 0) return alert('No data to export');
+  if(!window.currentLogs || window.currentLogs.length === 0) return showToast('No trade history data to export', '⚠️');
   const headers = ['Market', 'EntryPrice', 'Status', 'Result', 'PnL_Percent', 'Timestamp'];
   const rows = window.currentLogs.map(l => [
     `"${l.question.replace(/"/g, '""')}"`,
