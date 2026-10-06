@@ -23,6 +23,10 @@ import { calculateNetArbitrage } from "./engine/net_arbitrage.js";
 import { analyzeSmartMoneyWallets } from "./engine/smart_money.js";
 import { analyzeAiMispricing } from "./engine/ai_probability.js";
 
+import { calculateOrderbookSlippage } from "./engine/clob_depth.js";
+import { scanManifoldCrossEdges } from "./engine/manifold_matcher.js";
+import { calculatePortfolioAnalytics } from "./engine/portfolio_analytics.js";
+
 // ─── Load .env ──────────────────────────────────────────────────────────
 const require = createRequire(import.meta.url);
 try {
@@ -46,6 +50,7 @@ let arbitrageCache = {
   oppsNetArb: [],
   oppsSmartMoney: [],
   oppsAiMispricing: [],
+  oppsManifold: [],
   updatedAt: new Date().toISOString()
 };
 
@@ -121,6 +126,13 @@ async function backgroundScan() {
       const smartMoney = analyzeSmartMoneyWallets(rawMarkets);
       const aiMispricing = analyzeAiMispricing(rawMarkets);
 
+      let manifoldEdges = [];
+      try {
+        manifoldEdges = await scanManifoldCrossEdges(rawMarkets);
+      } catch (err) {
+        console.warn("[Manifold Matcher Warning]", err.message);
+      }
+
       arbitrageCache = {
         opps1c: scan1cOpps(rawMarkets),
         oppsNegRisk: scanNegRiskOpps(rawMarkets),
@@ -129,9 +141,10 @@ async function backgroundScan() {
         oppsNetArb: netArbs,
         oppsSmartMoney: smartMoney,
         oppsAiMispricing: aiMispricing,
+        oppsManifold: manifoldEdges,
         updatedAt: new Date().toISOString()
       };
-      console.log(`[Edge Engine] Ready: ${arbitrageCache.oppsNetArb.length} Net Arbs, ${arbitrageCache.oppsSmartMoney.length} Smart Money, ${arbitrageCache.oppsAiMispricing.length} AI Mispricing, ${arbitrageCache.opps1c.length} 1c dust, ${arbitrageCache.oppsWhale.length} Whales`);
+      console.log(`[Edge Engine] Ready: ${arbitrageCache.oppsNetArb.length} Net Arbs, ${arbitrageCache.oppsManifold.length} Manifold Arbs, ${arbitrageCache.oppsSmartMoney.length} Smart Money, ${arbitrageCache.oppsAiMispricing.length} AI Mispricing, ${arbitrageCache.opps1c.length} 1c dust, ${arbitrageCache.oppsWhale.length} Whales`);
     } catch (e) {
       console.warn("[Edge Engine Scan Error]", e.message);
     }
@@ -258,10 +271,51 @@ async function handler(req, res) {
       status: "OPERATIONAL",
       decisionEngineLatencyMs: 18.4,
       totalMarketsScanned: cache?.totalMarkets || 1500,
-      platformsConnected: ["Polymarket (CLOB/Gamma)", "Kalshi (REST/WS)", "Polygon RPC"],
+      platformsConnected: ["Polymarket (CLOB/Gamma)", "Kalshi (REST/WS)", "Manifold Markets (REST)", "Polygon RPC"],
       builderFeeEarnedUsd: 1420.50,
       uptimeSeconds: Math.round(process.uptime())
     });
+    return;
+  }
+
+  // ══ GET /api/v1/clob/depth — Live L2 Orderbook Depth & Slippage Simulator ══
+  if (url === "/api/v1/clob/depth") {
+    try {
+      const q = new URLSearchParams(req.url.split("?")[1] || "");
+      const tokenId = q.get("token_id");
+      const amount = parseFloat(q.get("amount") || "100");
+      if (!tokenId) {
+        err(res, "Missing token_id parameter", 400);
+        return;
+      }
+      const depth = await calculateOrderbookSlippage(tokenId, amount);
+      ok(res, depth);
+    } catch (e) {
+      err(res, e.message, 500);
+    }
+    return;
+  }
+
+  // ══ GET /api/v1/arbitrage/manifold — Zero-Key Manifold Cross-Exchange Alpha ══
+  if (url === "/api/v1/arbitrage/manifold") {
+    ok(res, {
+      count: arbitrageCache.oppsManifold?.length || 0,
+      data: arbitrageCache.oppsManifold || [],
+      updatedAt: arbitrageCache.updatedAt
+    });
+    return;
+  }
+
+  // ══ GET /api/v1/portfolio/analytics — Institutional Equity Curve & Metrics ══
+  if (url === "/api/v1/portfolio/analytics") {
+    try {
+      const q = new URLSearchParams(req.url.split("?")[1] || "");
+      const bankroll = parseFloat(q.get("bankroll") || "1000");
+      const analytics = calculatePortfolioAnalytics(bankroll);
+      ok(res, analytics);
+    } catch (e) {
+      err(res, e.message, 500);
+    }
     return;
   }
 

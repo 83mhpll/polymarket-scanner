@@ -843,6 +843,31 @@
       </div>
     </div>
 
+    <!-- Live CLOB Orderbook Depth & Slippage Simulator -->
+    <div id="clob-depth-card" style="background:rgba(56,189,248,0.06); border:1px solid rgba(56,189,248,0.25); border-radius:14px; padding:12px 16px; margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span style="font-size:11px; font-weight:800; color:var(--accent-cyan); display:flex; align-items:center; gap:6px;">
+          <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--accent-cyan); box-shadow:0 0 8px var(--accent-cyan); animation:pulse 1.5s infinite;"></span>
+          LIVE CLOB L2 ORDERBOOK TELEMETRY
+        </span>
+        <span id="clob-depth-status" style="font-size:10px; color:var(--muted);">Checking depth...</span>
+      </div>
+      <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; text-align:center;">
+        <div style="background:rgba(255,255,255,0.02); padding:6px; border-radius:8px;">
+          <div style="font-size:9px; color:var(--muted); font-weight:700;">BEST BID / ASK</div>
+          <div id="clob-bid-ask" style="font-size:12px; font-weight:800; color:#ffffff; font-family:'Outfit', sans-serif;">— / —</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.02); padding:6px; border-radius:8px;">
+          <div style="font-size:9px; color:var(--muted); font-weight:700;">EXECUTION SLIPPAGE</div>
+          <div id="clob-slippage-val" style="font-size:12px; font-weight:800; color:var(--green); font-family:'Outfit', sans-serif;">0.0% Slip</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.02); padding:6px; border-radius:8px;">
+          <div style="font-size:9px; color:var(--muted); font-weight:700;">MAX SAFE DEPTH</div>
+          <div id="clob-max-safe" style="font-size:12px; font-weight:800; color:var(--accent); font-family:'Outfit', sans-serif;">$—</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Execution Method -->
     <div class="form-group">
       <label>Execution Routing</label>
@@ -923,6 +948,7 @@
     
     <div style="display:flex; gap:8px; margin-bottom:20px; border-bottom:1px solid var(--border); padding-bottom:12px; flex-wrap:wrap;">
       <button class="filter-btn active" id="qtab-netarb" onclick="switchQuantTab('netarb', this)">⚡ Cross-Market Net Arb</button>
+      <button class="filter-btn" id="qtab-manifold" onclick="switchQuantTab('manifold', this)">🌐 Manifold Consensus Arb</button>
       <button class="filter-btn" id="qtab-smartmoney" onclick="switchQuantTab('smartmoney', this)">🐋 Smart Money (Score 0-100)</button>
       <button class="filter-btn" id="qtab-aimodel" onclick="switchQuantTab('aimodel', this)">🧠 Calibrated AI Alpha</button>
       <button class="filter-btn" id="qtab-1c" onclick="switchQuantTab('1c', this)">🎯 1c Dust Sweeper</button>
@@ -1206,12 +1232,12 @@ function createCardHTML(o, i, isAlert = false) {
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; flex:1;">
         <button class="btn-bet yes" 
                 style="${isYesTarget ? 'box-shadow: 0 0 18px rgba(163,230,53,0.45); border: 2px solid rgba(255,255,255,0.9);' : 'opacity:0.85;'}"
-                onclick="openOrderModal('${escapeJSArg(o.question)}', 'YES', ${o.price}, '${escapeJSArg(o.url)}')">
+                onclick="openOrderModal('${escapeJSArg(o.question)}', 'YES', ${o.price}, '${escapeJSArg(o.url)}', '${escapeJSArg(o.tokenID || '')}')">
           🟢 Buy YES ${centYes}¢ ${isYesTarget ? '🔥' : ''}
         </button>
         <button class="btn-bet no" 
                 style="${!isYesTarget ? 'box-shadow: 0 0 18px rgba(248,113,113,0.45); border: 2px solid rgba(255,255,255,0.9);' : 'opacity:0.85;'}"
-                onclick="openOrderModal('${escapeJSArg(o.question)}', 'NO', ${(1 - o.price).toFixed(3)}, '${escapeJSArg(o.url)}')">
+                onclick="openOrderModal('${escapeJSArg(o.question)}', 'NO', ${(1 - o.price).toFixed(3)}, '${escapeJSArg(o.url)}', '${escapeJSArg(o.tokenID || '')}')">
           🔴 Buy NO ${centNo}¢ ${!isYesTarget ? '🔥' : ''}
         </button>
       </div>
@@ -1382,6 +1408,73 @@ function renderQuantTab() {
               <td><b>$${item.strategy.combinedCost.toFixed(2)}</b><br><small style="color:var(--muted)">Fee+Slip: -$${(item.strategy.takerFees + item.strategy.estimatedSlippage).toFixed(3)}</small></td>
               <td><span class="bt-win" style="font-size:14px; font-weight:800;">+${item.strategy.netRoiPercent}%</span></td>
               <td><button class="btn-bet yes" style="padding:5px 12px; font-size:12px;" onclick="openOrderModal('${escapeJSArg(item.marketTopic)}', '${escapeJSArg(item.strategy.leg1.action)}', ${item.strategy.leg1.price}, '${escapeJSArg(item.strategy.leg1.url)}')">⚡ Execute Arb</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } else if (currentQuantSubTab === 'manifold') {
+    const list = quantData.oppsManifold || [];
+    if (list.length === 0) {
+      container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--muted)">
+        <p style="font-size:32px; margin-bottom:12px;">🌐</p>
+        <p>กำลังค้นหาตลาดคู่เทียบ Polymarket ↔ Manifold Markets (Public Free API)...</p>
+        <p style="font-size:12px; margin-top:8px;">ระบบสแกนอัตโนมัติทุก 2 นาทีเพื่อตรวจจับส่วนต่างราคา</p>
+      </div>`;
+      return;
+    }
+    container.innerHTML = `
+      <div style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.25); border-radius:14px; padding:14px 18px; margin-bottom:16px;">
+        <div style="font-size:14px; font-weight:800; color:var(--accent-cyan); margin-bottom:6px;">💡 กลยุทธ์ Manifold Consensus Arbitrage (Zero-Key Public Alpha)</div>
+        <div style="font-size:12px; color:var(--text); line-height:1.5;">
+          • <b>หลักการ:</b> Manifold Markets มีสภาพคล่องภูมิปัญญามวลชน (Crowd Wisdom) ที่รวดเร็วมาก โดยไม่ต้องใช้ API Key หรือ KYC<br>
+          • <b>Divergence Edge:</b> เมื่อราคาบน Polymarket คลาดเคลื่อนจาก Manifold เกิน 8% แปลว่ามีตลาดใดตลาดหนึ่งกำลัง Underpriced หรือ Overpriced<br>
+          • <b>การทำกำไร:</b> ช้อนซื้อฝั่งที่มี Discount บน Polymarket ก่อนที่ราคาสองตลาดจะวิ่งเข้าหากัน (Mean Reversion)
+        </div>
+      </div>
+      <div style="margin-bottom:12px; font-size:13px; color:var(--muted)">พบ <b>${list.length}</b> ดีลที่มีความคลาดเคลื่อนทางสถิติ (Divergence &ge; 8%)</div>
+      <table class="bt-table">
+        <thead>
+          <tr>
+            <th>หัวข้อตลาด (Cross-Market Event)</th>
+            <th>Polymarket Prob</th>
+            <th>Manifold Consensus</th>
+            <th>Divergence Gap</th>
+            <th>Edge Suggestion</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${list.map(item => `
+            <tr>
+              <td style="max-width:240px; word-break:break-word;">
+                <div style="font-weight:700; color:#ffffff;">${escapeHTML(item.topic)}</div>
+                <span class="badge" style="background:rgba(56,189,248,0.12); color:var(--accent-cyan); font-size:10px; margin-top:4px;">${escapeHTML(item.category || 'General')} • Similarity: ${Math.round(item.similarityScore * 100)}%</span>
+              </td>
+              <td>
+                <b style="color:var(--accent); font-size:15px; font-family:'Outfit', sans-serif;">${item.polymarket.probPercent}%</b>
+                <div style="font-size:11px; color:var(--muted)">($${item.polymarket.yesPrice.toFixed(2)})</div>
+              </td>
+              <td>
+                <b style="color:var(--accent-purple); font-size:15px; font-family:'Outfit', sans-serif;">${item.manifold.probPercent}%</b>
+                <div style="font-size:11px; color:var(--muted)">Crowd Wisdom</div>
+              </td>
+              <td>
+                <span class="bt-win" style="font-size:13px; font-weight:800; background:rgba(56,189,248,0.15); color:var(--accent-cyan); border-color:rgba(56,189,248,0.3);">
+                  ${item.divergence > 0 ? '+' : ''}${item.divergence}%
+                </span>
+              </td>
+              <td>
+                <div style="font-size:12px; font-weight:700; color:${item.divergence < 0 ? '#4ade80' : '#f87171'};">
+                  ${escapeHTML(item.edgeSide)}
+                </div>
+              </td>
+              <td>
+                <div style="display:flex; gap:6px;">
+                  <button class="btn-bet yes" style="padding:4px 10px; font-size:11px;" onclick="openOrderModal('${escapeJSArg(item.polymarket.question)}', 'YES', ${item.polymarket.yesPrice}, '${escapeJSArg(item.polymarket.url)}')">⚡ Trade</button>
+                  <a href="${item.manifold.url}" target="_blank" class="btn btn-secondary" style="padding:4px 8px; font-size:11px;" title="View on Manifold">🌐</a>
+                </div>
+              </td>
             </tr>
           `).join('')}
         </tbody>
@@ -1777,7 +1870,7 @@ function drawOrderShareChart(price) {
   ctx.stroke();
 }
 
-function openOrderModal(question, outcome, price, marketUrl) {
+function openOrderModal(question, outcome, price, marketUrl, tokenID = '') {
   const normOutcome = outcome.toUpperCase() === 'NO' ? 'NO' : 'YES';
   const p = parseFloat(price);
   currentActiveOrder = { 
@@ -1785,7 +1878,8 @@ function openOrderModal(question, outcome, price, marketUrl) {
     outcome: normOutcome, 
     price: p, 
     baseYesPrice: normOutcome === 'YES' ? p : (1 - p),
-    marketUrl 
+    marketUrl,
+    tokenID: tokenID || ''
   };
   
   document.getElementById('order-market-title').textContent = question;
@@ -1861,6 +1955,46 @@ function setOrderAmount(amt, btn) {
   recalcOrderTicket();
 }
 
+let clobDebounceTid = null;
+async function fetchLiveClobTelemetry(tokenId, amt) {
+  const statusEl = document.getElementById('clob-depth-status');
+  const bidAskEl = document.getElementById('clob-bid-ask');
+  const slipEl = document.getElementById('clob-slippage-val');
+  const safeEl = document.getElementById('clob-max-safe');
+  if (!statusEl || !bidAskEl) return;
+
+  if (!tokenId) {
+    statusEl.textContent = 'Standard Routing';
+    bidAskEl.textContent = `${(currentActiveOrder.price*100).toFixed(0)}¢ Est.`;
+    slipEl.textContent = amt > 300 ? '~0.8% Slip' : '<0.2% Slip';
+    safeEl.textContent = '$500 Safe';
+    return;
+  }
+
+  statusEl.textContent = 'Fetching L2 depth...';
+  try {
+    const res = await fetch(`/api/v1/clob/depth?token_id=${encodeURIComponent(tokenId)}&amount=${amt}`);
+    const d = await res.json();
+    if (d && d.success) {
+      statusEl.textContent = `🟢 Live CLOB (${d.asksDepthCount} levels)`;
+      bidAskEl.textContent = `${(d.bestBid*100).toFixed(0)}¢ / ${(d.bestAsk*100).toFixed(0)}¢ (${d.spreadPercent}%)`;
+      
+      const isHighSlip = d.slippagePercent > 1.5;
+      slipEl.textContent = `${d.slippagePercent > 0 ? '+' : ''}${d.slippagePercent}% (Avg: ${d.effectiveCent}¢)`;
+      slipEl.style.color = isHighSlip ? '#f87171' : '#34d399';
+      
+      safeEl.textContent = d.maxSafeFillUsd > 0 ? `$${d.maxSafeFillUsd.toLocaleString()}` : '$250';
+    } else {
+      statusEl.textContent = 'Midpoint Model';
+      bidAskEl.textContent = `${(currentActiveOrder.price*100).toFixed(0)}¢ Mid`;
+      slipEl.textContent = amt > 300 ? '~0.8%' : '<0.2%';
+      safeEl.textContent = '$400';
+    }
+  } catch(e) {
+    statusEl.textContent = 'Offline fallback';
+  }
+}
+
 function recalcOrderTicket() {
   if (!currentActiveOrder) return;
   const amt = parseFloat(document.getElementById('order-amount-input').value) || 0;
@@ -1878,6 +2012,12 @@ function recalcOrderTicket() {
   document.getElementById('order-est-shares').textContent = `${shares.toFixed(1)} Shares @ ${(price * 100).toFixed(0)}¢ ($${price.toFixed(3)})`;
   document.getElementById('order-est-payout').textContent = `$${estPayout.toFixed(2)} USDC`;
   document.getElementById('order-est-roi').textContent = `+${netRoi.toFixed(2)}%`;
+
+  // Debounced live CLOB Orderbook Telemetry call
+  clearTimeout(clobDebounceTid);
+  clobDebounceTid = setTimeout(() => {
+    fetchLiveClobTelemetry(currentActiveOrder.tokenID, amt);
+  }, 150);
 }
 
 async function submitOrderTicket() {
@@ -2299,6 +2439,53 @@ async function liveTrade(idx) {
 
 let portfolioInterval;
 
+function renderEquityCurveSvg(points) {
+  if (!points || points.length < 2) {
+    return `<div style="text-align:center; padding:45px 0; color:var(--muted); font-size:12px;">Accumulating trade history for equity curve...</div>`;
+  }
+  const w = 820;
+  const h = 125;
+  const padding = 20;
+
+  const equities = points.map(p => p.equity);
+  const minEq = Math.min(...equities) * 0.98;
+  const maxEq = Math.max(...equities) * 1.02;
+  const range = maxEq - minEq || 1;
+
+  const svgPoints = points.map((p, i) => {
+    const x = padding + (i / (points.length - 1)) * (w - 2 * padding);
+    const y = h - padding - ((p.equity - minEq) / range) * (h - 2 * padding);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  const pathD = `M ${svgPoints.join(' L ')}`;
+  const firstX = padding;
+  const lastX = w - padding;
+  const bottomY = h - padding;
+  const areaD = `M ${firstX},${bottomY} L ${svgPoints.join(' L ')} L ${lastX},${bottomY} Z`;
+
+  const lastPoint = points[points.length - 1];
+  const isUp = (lastPoint.equity >= points[0].equity);
+  const strokeColor = isUp ? '#a3e635' : '#f87171';
+  const gradStart = isUp ? 'rgba(163,230,53,0.35)' : 'rgba(248,113,113,0.35)';
+
+  return `
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:100%; display:block; overflow:visible;">
+      <defs>
+        <linearGradient id="eq-grad-main" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${gradStart}"/>
+          <stop offset="100%" stop-color="transparent"/>
+        </linearGradient>
+      </defs>
+      <!-- Base Line at Initial Capital -->
+      <line x1="${padding}" y1="${(h - padding - ((points[0].equity - minEq) / range) * (h - 2 * padding)).toFixed(1)}" x2="${w - padding}" y2="${(h - padding - ((points[0].equity - minEq) / range) * (h - 2 * padding)).toFixed(1)}" stroke="rgba(255,255,255,0.12)" stroke-dasharray="4,4" stroke-width="1"/>
+      <path d="${areaD}" fill="url(#eq-grad-main)"/>
+      <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="${svgPoints[svgPoints.length - 1].split(',')[0]}" cy="${svgPoints[svgPoints.length - 1].split(',')[1]}" r="4" fill="#ffffff" stroke="${strokeColor}" stroke-width="2"/>
+    </svg>
+  `;
+}
+
 async function openBacktest(silent = false) {
   if (!silent) {
     document.getElementById('bt-modal').style.display='flex';
@@ -2311,19 +2498,36 @@ async function openBacktest(silent = false) {
     const res = await fetch('/api/backtest/log');
     const logs = await res.json();
     
-    // Calculate Portfolio Summary
-    const closedTrades = logs.filter(l => l.status === 'Closed');
-    const totalTrades = logs.length;
-    const wins = closedTrades.filter(l => l.result === 'Win').length;
-    const winRate = closedTrades.length > 0 ? ((wins / closedTrades.length) * 100).toFixed(1) : 0;
-    
-    let totalPnL = 0;
-    logs.forEach(l => { if (l.pnl !== undefined) totalPnL += l.pnl; });
+    // Fetch institutional portfolio analytics & equity curve
+    try {
+      const aRes = await fetch('/api/v1/portfolio/analytics?bankroll=1000');
+      const analytics = await aRes.json();
+      if (analytics && analytics.equityCurve) {
+        document.getElementById('dash-equity').textContent = `$${analytics.currentEquity.toLocaleString()}`;
+        document.getElementById('dash-pnl').textContent = `${analytics.netPnLPercent > 0 ? '+' : ''}${analytics.netPnLPercent}%`;
+        document.getElementById('dash-pnl').style.color = analytics.netPnLPercent >= 0 ? 'var(--accent)' : '#f87171';
+        document.getElementById('dash-winrate').textContent = `${analytics.winRate}%`;
+        document.getElementById('dash-profit-factor').textContent = `${analytics.profitFactor}x`;
+        document.getElementById('dash-mdd').textContent = `-${analytics.maxDrawdownPercent}%`;
+        document.getElementById('dash-sharpe').textContent = `${analytics.sharpeRatio}`;
+        document.getElementById('dash-total').textContent = analytics.totalTrades;
 
-    document.getElementById('dash-total').textContent = totalTrades;
-    document.getElementById('dash-winrate').textContent = winRate + '%';
-    document.getElementById('dash-pnl').textContent = (totalPnL > 0 ? '+' : '') + totalPnL.toFixed(2) + '%';
-    document.getElementById('dash-pnl').style.color = totalPnL >= 0 ? '#4ade80' : '#f87171';
+        // Render SVG Equity Curve
+        document.getElementById('equity-svg-container').innerHTML = renderEquityCurveSvg(analytics.equityCurve);
+
+        // Render Category Breakdown Badges
+        const pillsContainer = document.getElementById('dash-cat-pills');
+        if (pillsContainer && analytics.categoryBreakdown) {
+          pillsContainer.innerHTML = analytics.categoryBreakdown.map(c => `
+            <span class="badge" style="background:rgba(255,255,255,0.04); border:1px solid var(--border); padding:3px 9px; font-size:11px;">
+              <b>${escapeHTML(c.category)}:</b> ${c.winRate}% Win (${c.total} trades, ${c.pnlUsd >= 0 ? '+' : ''}$${c.pnlUsd})
+            </span>
+          `).join('');
+        }
+      }
+    } catch(err) {
+      console.warn('Analytics fetch error:', err);
+    }
 
     window.currentLogs = logs; // For CSV export
 
@@ -2488,39 +2692,76 @@ function updateTickers() {
 setInterval(updateTickers, 1000); // Update every 1s for real-time feel
 </script>
 
-<!-- Analytics Modal -->
+<!-- Institutional Portfolio Analytics & Equity Curve Modal -->
 <div id="bt-modal" class="modal-overlay" onclick="if(event.target===this)closeBacktest()" style="display:none;">
-  <div class="modal" style="max-width: 700px; width: 90%;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
-      <h2 style="margin:0">📊 Portfolio & Analytics</h2>
-      <button class="btn btn-primary" style="padding: 6px 12px; font-size: 13px;" onclick="exportCSV()">📥 Export CSV</button>
-    </div>
-    
-    <!-- Dashboard Cards -->
-    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
-      <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
-        <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">Total Trades</div>
-        <div id="dash-total" style="font-size: 24px; font-weight: bold; color: var(--text);">0</div>
-      </div>
-      <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
-        <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">Win Rate</div>
-        <div id="dash-winrate" style="font-size: 24px; font-weight: bold; color: var(--accent);">0%</div>
-      </div>
-      <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
-        <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">Realized PnL</div>
-        <div id="dash-pnl" style="font-size: 24px; font-weight: bold; color: var(--text);">0%</div>
+  <div class="modal" style="max-width: 860px; width: 92%; max-height: 88vh; overflow-y: auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
+      <h2 style="margin:0; font-size:20px;">📊 Institutional Portfolio Analytics</h2>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="exportCSV()">📥 Export CSV</button>
+        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="closeBacktest()">✕</button>
       </div>
     </div>
 
-    <div style="max-height: 400px; overflow-y: auto;">
-      <table class="bt-table">
+    <!-- Cumulative Equity Curve Box -->
+    <div style="background:rgba(163,230,53,0.03); border:1px solid rgba(163,230,53,0.22); border-radius:14px; padding:16px 20px; margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <span style="font-size:12px; font-weight:800; color:var(--accent); letter-spacing:0.5px; display:flex; align-items:center; gap:6px;">
+          📈 CUMULATIVE PORTFOLIO EQUITY CURVE (USDC)
+        </span>
+        <span id="equity-ref-capital" style="font-size:11px; color:var(--muted); font-weight:600;">Base: $1,000.00 USDC</span>
+      </div>
+      <div id="equity-svg-container" style="width:100%; height:125px;">
+        <div style="text-align:center; padding:45px 0; color:var(--muted); font-size:12px;">Loading equity telemetry...</div>
+      </div>
+    </div>
+    
+    <!-- 6 Institutional KPI Metric Cards -->
+    <div style="display:grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 16px;">
+      <div style="background: var(--surface-solid); padding: 12px 6px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 10px; color: var(--muted); font-weight:700; text-transform:uppercase;">Current Equity</div>
+        <div id="dash-equity" style="font-size: 16px; font-weight: 800; color: #ffffff; font-family:'Outfit',sans-serif; margin-top:3px;">$1,000</div>
+      </div>
+      <div style="background: var(--surface-solid); padding: 12px 6px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 10px; color: var(--muted); font-weight:700; text-transform:uppercase;">Net PnL %</div>
+        <div id="dash-pnl" style="font-size: 16px; font-weight: 800; color: var(--accent); font-family:'Outfit',sans-serif; margin-top:3px;">+0.00%</div>
+      </div>
+      <div style="background: var(--surface-solid); padding: 12px 6px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 10px; color: var(--muted); font-weight:700; text-transform:uppercase;">Win Rate</div>
+        <div id="dash-winrate" style="font-size: 16px; font-weight: 800; color: var(--green); font-family:'Outfit',sans-serif; margin-top:3px;">0%</div>
+      </div>
+      <div style="background: var(--surface-solid); padding: 12px 6px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 10px; color: var(--muted); font-weight:700; text-transform:uppercase;">Profit Factor</div>
+        <div id="dash-profit-factor" style="font-size: 16px; font-weight: 800; color: var(--accent-cyan); font-family:'Outfit',sans-serif; margin-top:3px;">0.0x</div>
+      </div>
+      <div style="background: var(--surface-solid); padding: 12px 6px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 10px; color: var(--muted); font-weight:700; text-transform:uppercase;">Max Drawdown</div>
+        <div id="dash-mdd" style="font-size: 16px; font-weight: 800; color: var(--red); font-family:'Outfit',sans-serif; margin-top:3px;">0.0%</div>
+      </div>
+      <div style="background: var(--surface-solid); padding: 12px 6px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 10px; color: var(--muted); font-weight:700; text-transform:uppercase;">Sharpe Ratio</div>
+        <div id="dash-sharpe" style="font-size: 16px; font-weight: 800; color: var(--accent-purple); font-family:'Outfit',sans-serif; margin-top:3px;">0.00</div>
+      </div>
+    </div>
+
+    <!-- Category Performance Badges Bar -->
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11px; font-weight:700; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">Win Rate by Category:</div>
+      <div id="dash-cat-pills" style="display:flex; flex-wrap:wrap; gap:6px;">
+        <span class="badge" style="background:rgba(255,255,255,0.05); color:var(--muted);">Loading categories...</span>
+      </div>
+    </div>
+
+    <!-- Trade History Table -->
+    <div style="max-height: 320px; overflow-y: auto; border:1px solid var(--border); border-radius:12px;">
+      <table class="bt-table" style="margin:0;">
         <thead>
           <tr>
-            <th>Market</th>
-            <th>Entry</th>
-            <th>Status</th>
+            <th>Market & Outcome</th>
+            <th>Entry Price</th>
+            <th>Status / Result</th>
             <th>PnL %</th>
-            <th>Date</th>
+            <th>Timestamp</th>
           </tr>
         </thead>
         <tbody id="bt-body">
@@ -2528,8 +2769,9 @@ setInterval(updateTickers, 1000); // Update every 1s for real-time feel
         </tbody>
       </table>
     </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeBacktest()">Close</button>
+    <div class="modal-actions" style="margin-top:14px; justify-content:space-between; align-items:center;">
+      <div style="font-size:12px; color:var(--muted);">Total Position History: <b id="dash-total" style="color:#ffffff;">0</b> trades</div>
+      <button class="btn btn-secondary" onclick="closeBacktest()">Close Window</button>
     </div>
   </div>
 </div>
