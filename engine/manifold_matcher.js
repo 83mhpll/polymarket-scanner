@@ -116,6 +116,24 @@ export async function scanManifoldCrossEdges(polyMarkets = []) {
           const polySlug = Array.isArray(poly.events) && poly.events[0]?.slug ? poly.events[0].slug : poly.slug || '';
           const category = getCategory(poly);
 
+          // Calculate Days to Resolution for capital-lockup awareness
+          const polyEndDate = poly.endDate || poly.end_date_iso || (poly.events && poly.events[0]?.endDate);
+          let daysToResolve = 30; // default estimate
+          if (polyEndDate) {
+            const diffMs = new Date(polyEndDate).getTime() - Date.now();
+            if (diffMs > 0) {
+              daysToResolve = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+            }
+          }
+
+          // Calculate raw ROI and Annualized ROI (Capital Lockup)
+          const rawRoi = absDivergence / Math.min(polyYesPrice, 1 - polyYesPrice);
+          const annualizedReturn = (Math.pow(1 + rawRoi, 365 / daysToResolve) - 1) * 100;
+          const cappedAnnualized = Math.min(9999, Math.round(annualizedReturn));
+
+          // Basis risk evaluation (e.g. resolution criteria or date mismatch)
+          const basisRiskNotice = 'Basis Risk: Verify resolution source (Polymarket UMA vs Manifold Community Admin)';
+
           crossEdges.push({
             type: 'cross_exchange_divergence',
             topic: poly.question,
@@ -125,6 +143,7 @@ export async function scanManifoldCrossEdges(polyMarkets = []) {
               yesPrice: parseFloat(polyYesPrice.toFixed(3)),
               probPercent: (polyYesPrice * 100).toFixed(1),
               liquidity: parseFloat(poly.liquidityNum ?? poly.liquidity ?? 0),
+              endDate: polyEndDate || null,
               url: `https://polymarket.com/event/${polySlug}`
             },
             manifold: {
@@ -135,6 +154,9 @@ export async function scanManifoldCrossEdges(polyMarkets = []) {
             },
             divergence: parseFloat((divergence * 100).toFixed(1)),
             absDivergence: parseFloat((absDivergence * 100).toFixed(1)),
+            daysToResolve: daysToResolve,
+            annualizedRoiPercent: cappedAnnualized,
+            basisRiskNotice: basisRiskNotice,
             edgeSide: divergence > 0 ? 'Polymarket Premium (Crowd expects lower)' : 'Polymarket Discount (Crowd expects higher)',
             confidence: Math.min(95, Math.round(jaccard * 100 + absDivergence * 50)),
             category: category,

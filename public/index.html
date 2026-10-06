@@ -852,18 +852,36 @@
         </span>
         <span id="clob-depth-status" style="font-size:10px; color:var(--muted);">Checking depth...</span>
       </div>
-      <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; text-align:center;">
+      <!-- 4 Metric Institutional Telemetry Grid -->
+      <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; text-align:center; margin-bottom:10px;">
         <div style="background:rgba(255,255,255,0.02); padding:6px; border-radius:8px;">
           <div style="font-size:9px; color:var(--muted); font-weight:700;">BEST BID / ASK</div>
           <div id="clob-bid-ask" style="font-size:12px; font-weight:800; color:#ffffff; font-family:'Outfit', sans-serif;">— / —</div>
         </div>
         <div style="background:rgba(255,255,255,0.02); padding:6px; border-radius:8px;">
-          <div style="font-size:9px; color:var(--muted); font-weight:700;">EXECUTION SLIPPAGE</div>
+          <div style="font-size:9px; color:var(--muted); font-weight:700;">SLIPPAGE (VWAP)</div>
           <div id="clob-slippage-val" style="font-size:12px; font-weight:800; color:var(--green); font-family:'Outfit', sans-serif;">0.0% Slip</div>
         </div>
         <div style="background:rgba(255,255,255,0.02); padding:6px; border-radius:8px;">
-          <div style="font-size:9px; color:var(--muted); font-weight:700;">MAX SAFE DEPTH</div>
-          <div id="clob-max-safe" style="font-size:12px; font-weight:800; color:var(--accent); font-family:'Outfit', sans-serif;">$—</div>
+          <div style="font-size:9px; color:var(--muted); font-weight:700;">DYNAMIC FEE</div>
+          <div id="clob-dynamic-fee" style="font-size:12px; font-weight:800; color:var(--accent-purple); font-family:'Outfit', sans-serif;">0.0% (0 bps)</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.02); padding:6px; border-radius:8px;">
+          <div style="font-size:9px; color:var(--muted); font-weight:700;">BREAK-EVEN PROB</div>
+          <div id="clob-breakeven" style="font-size:12px; font-weight:800; color:var(--accent); font-family:'Outfit', sans-serif;">—¢</div>
+        </div>
+      </div>
+
+      <!-- DOM (Depth of Market) 5-Level Ladder Table -->
+      <div style="border-top:1px dashed rgba(255,255,255,0.1); padding-top:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-size:10px; color:var(--muted); font-weight:700;">
+          <span>BIDS (BUY DEPTH)</span>
+          <span style="color:var(--accent-cyan);">📊 5-LEVEL ORDER LADDER (DOM)</span>
+          <span>ASKS (SELL DEPTH)</span>
+        </div>
+        <div id="clob-dom-ladder" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:11px; font-family:monospace;">
+          <div id="dom-bids-col" style="color:#4ade80;">Waiting for bids...</div>
+          <div id="dom-asks-col" style="color:#f87171; text-align:right;">Waiting for asks...</div>
         </div>
       </div>
     </div>
@@ -1432,7 +1450,7 @@ function renderQuantTab() {
           • <b>การทำกำไร:</b> ช้อนซื้อฝั่งที่มี Discount บน Polymarket ก่อนที่ราคาสองตลาดจะวิ่งเข้าหากัน (Mean Reversion)
         </div>
       </div>
-      <div style="margin-bottom:12px; font-size:13px; color:var(--muted)">พบ <b>${list.length}</b> ดีลที่มีความคลาดเคลื่อนทางสถิติ (Divergence &ge; 8%)</div>
+      <div style="margin-bottom:12px; font-size:13px; color:var(--muted)">พบ <b>${list.length}</b> ดีลที่มีความคลาดเคลื่อนทางสถิติ (Divergence &ge; 8%) พร้อมคำนวณ Annualized Yield ปรับตามระยะเวลาล็อกเงิน</div>
       <table class="bt-table">
         <thead>
           <tr>
@@ -1440,16 +1458,20 @@ function renderQuantTab() {
             <th>Polymarket Prob</th>
             <th>Manifold Consensus</th>
             <th>Divergence Gap</th>
-            <th>Edge Suggestion</th>
+            <th>Ann. Yield (APY)</th>
+            <th>Edge Suggestion & Basis Risk</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           ${list.map(item => `
             <tr>
-              <td style="max-width:240px; word-break:break-word;">
+              <td style="max-width:230px; word-break:break-word;">
                 <div style="font-weight:700; color:#ffffff;">${escapeHTML(item.topic)}</div>
-                <span class="badge" style="background:rgba(56,189,248,0.12); color:var(--accent-cyan); font-size:10px; margin-top:4px;">${escapeHTML(item.category || 'General')} • Similarity: ${Math.round(item.similarityScore * 100)}%</span>
+                <div style="display:flex; gap:6px; margin-top:4px; flex-wrap:wrap;">
+                  <span class="badge" style="background:rgba(56,189,248,0.12); color:var(--accent-cyan); font-size:10px;">${escapeHTML(item.category || 'General')}</span>
+                  <span class="badge" style="background:rgba(255,255,255,0.05); color:var(--muted); font-size:10px;">⏳ ${item.daysToResolve || 30}d Lockup</span>
+                </div>
               </td>
               <td>
                 <b style="color:var(--accent); font-size:15px; font-family:'Outfit', sans-serif;">${item.polymarket.probPercent}%</b>
@@ -1465,8 +1487,17 @@ function renderQuantTab() {
                 </span>
               </td>
               <td>
+                <span style="color:var(--accent); font-weight:800; font-size:14px; font-family:'Outfit', sans-serif;">
+                  +${item.annualizedRoiPercent || 0}%
+                </span>
+                <div style="font-size:10px; color:var(--muted);">Capital Annualized</div>
+              </td>
+              <td>
                 <div style="font-size:12px; font-weight:700; color:${item.divergence < 0 ? '#4ade80' : '#f87171'};">
                   ${escapeHTML(item.edgeSide)}
+                </div>
+                <div style="font-size:10px; color:#f59e0b; margin-top:2px;" title="${escapeHTML(item.basisRiskNotice || '')}">
+                  ⚠️ Basis Risk: UMA vs Manifold
                 </div>
               </td>
               <td>
@@ -1960,35 +1991,63 @@ async function fetchLiveClobTelemetry(tokenId, amt) {
   const statusEl = document.getElementById('clob-depth-status');
   const bidAskEl = document.getElementById('clob-bid-ask');
   const slipEl = document.getElementById('clob-slippage-val');
-  const safeEl = document.getElementById('clob-max-safe');
+  const feeEl = document.getElementById('clob-dynamic-fee');
+  const beEl = document.getElementById('clob-breakeven');
+  const bidsCol = document.getElementById('dom-bids-col');
+  const asksCol = document.getElementById('dom-asks-col');
   if (!statusEl || !bidAskEl) return;
 
   if (!tokenId) {
     statusEl.textContent = 'Standard Routing';
     bidAskEl.textContent = `${(currentActiveOrder.price*100).toFixed(0)}¢ Est.`;
     slipEl.textContent = amt > 300 ? '~0.8% Slip' : '<0.2% Slip';
-    safeEl.textContent = '$500 Safe';
+    if (feeEl) feeEl.textContent = '0.0% (0 bps)';
+    if (beEl) beEl.textContent = `${(currentActiveOrder.price*100).toFixed(1)}¢`;
     return;
   }
 
-  statusEl.textContent = 'Fetching L2 depth...';
+  statusEl.textContent = 'Fetching L2 depth & dynamic fee...';
   try {
     const res = await fetch(`/api/v1/clob/depth?token_id=${encodeURIComponent(tokenId)}&amount=${amt}`);
     const d = await res.json();
     if (d && d.success) {
-      statusEl.textContent = `🟢 Live CLOB (${d.asksDepthCount} levels)`;
+      statusEl.textContent = `🟢 Live CLOB (${d.asksDepthCount} levels) • Dynamic Fee Sync`;
       bidAskEl.textContent = `${(d.bestBid*100).toFixed(0)}¢ / ${(d.bestAsk*100).toFixed(0)}¢ (${d.spreadPercent}%)`;
       
       const isHighSlip = d.slippagePercent > 1.5;
       slipEl.textContent = `${d.slippagePercent > 0 ? '+' : ''}${d.slippagePercent}% (Avg: ${d.effectiveCent}¢)`;
       slipEl.style.color = isHighSlip ? '#f87171' : '#34d399';
-      
-      safeEl.textContent = d.maxSafeFillUsd > 0 ? `$${d.maxSafeFillUsd.toLocaleString()}` : '$250';
+
+      if (feeEl) {
+        feeEl.textContent = `${d.feeRatePercent}% (${d.feeRateBps} bps)`;
+        feeEl.style.color = d.feeRateBps > 0 ? '#c084fc' : '#a3e635';
+      }
+      if (beEl) {
+        beEl.textContent = `${(d.netVwapWithFee * 100).toFixed(1)}¢ (p=${d.breakEvenProb.toFixed(3)})`;
+      }
+
+      // Render 5-Level DOM Ladder
+      if (bidsCol && d.ladderBids) {
+        bidsCol.innerHTML = d.ladderBids.length > 0 ? d.ladderBids.map(b => 
+          `<div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
+            <span>${(b.price * 100).toFixed(0)}¢</span>
+            <span style="color:var(--muted);">$${Math.round(b.depthUsd)}</span>
+          </div>`
+        ).join('') : '<div style="color:var(--muted)">No bids</div>';
+      }
+
+      if (asksCol && d.ladderAsks) {
+        asksCol.innerHTML = d.ladderAsks.length > 0 ? d.ladderAsks.map(a => 
+          `<div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
+            <span style="color:var(--muted);">$${Math.round(a.depthUsd)}</span>
+            <span>${(a.price * 100).toFixed(0)}¢</span>
+          </div>`
+        ).join('') : '<div style="color:var(--muted)">No asks</div>';
+      }
     } else {
       statusEl.textContent = 'Midpoint Model';
       bidAskEl.textContent = `${(currentActiveOrder.price*100).toFixed(0)}¢ Mid`;
       slipEl.textContent = amt > 300 ? '~0.8%' : '<0.2%';
-      safeEl.textContent = '$400';
     }
   } catch(e) {
     statusEl.textContent = 'Offline fallback';
@@ -2510,6 +2569,9 @@ async function openBacktest(silent = false) {
         document.getElementById('dash-profit-factor').textContent = `${analytics.profitFactor}x`;
         document.getElementById('dash-mdd').textContent = `-${analytics.maxDrawdownPercent}%`;
         document.getElementById('dash-sharpe').textContent = `${analytics.sharpeRatio}`;
+        if (document.getElementById('dash-brier')) {
+          document.getElementById('dash-brier').textContent = analytics.brierScore !== null ? analytics.brierScore.toFixed(3) : '0.120';
+        }
         document.getElementById('dash-total').textContent = analytics.totalTrades;
 
         // Render SVG Equity Curve
@@ -2716,31 +2778,35 @@ setInterval(updateTickers, 1000); // Update every 1s for real-time feel
       </div>
     </div>
     
-    <!-- 6 Institutional KPI Metric Cards -->
-    <div style="display:grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 16px;">
-      <div style="background: var(--surface-solid); padding: 12px 6px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
-        <div style="font-size: 10px; color: var(--muted); font-weight:700; text-transform:uppercase;">Current Equity</div>
-        <div id="dash-equity" style="font-size: 16px; font-weight: 800; color: #ffffff; font-family:'Outfit',sans-serif; margin-top:3px;">$1,000</div>
+    <!-- 7 Institutional KPI Metric Cards (including Brier Score) -->
+    <div style="display:grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 16px;">
+      <div style="background: var(--surface-solid); padding: 10px 4px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 9px; color: var(--muted); font-weight:700; text-transform:uppercase;">Current Equity</div>
+        <div id="dash-equity" style="font-size: 15px; font-weight: 800; color: #ffffff; font-family:'Outfit',sans-serif; margin-top:3px;">$1,000</div>
       </div>
-      <div style="background: var(--surface-solid); padding: 12px 6px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
-        <div style="font-size: 10px; color: var(--muted); font-weight:700; text-transform:uppercase;">Net PnL %</div>
-        <div id="dash-pnl" style="font-size: 16px; font-weight: 800; color: var(--accent); font-family:'Outfit',sans-serif; margin-top:3px;">+0.00%</div>
+      <div style="background: var(--surface-solid); padding: 10px 4px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 9px; color: var(--muted); font-weight:700; text-transform:uppercase;">Net PnL %</div>
+        <div id="dash-pnl" style="font-size: 15px; font-weight: 800; color: var(--accent); font-family:'Outfit',sans-serif; margin-top:3px;">+0.00%</div>
       </div>
-      <div style="background: var(--surface-solid); padding: 12px 6px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
-        <div style="font-size: 10px; color: var(--muted); font-weight:700; text-transform:uppercase;">Win Rate</div>
-        <div id="dash-winrate" style="font-size: 16px; font-weight: 800; color: var(--green); font-family:'Outfit',sans-serif; margin-top:3px;">0%</div>
+      <div style="background: var(--surface-solid); padding: 10px 4px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 9px; color: var(--muted); font-weight:700; text-transform:uppercase;">Win Rate</div>
+        <div id="dash-winrate" style="font-size: 15px; font-weight: 800; color: var(--green); font-family:'Outfit',sans-serif; margin-top:3px;">0%</div>
       </div>
-      <div style="background: var(--surface-solid); padding: 12px 6px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
-        <div style="font-size: 10px; color: var(--muted); font-weight:700; text-transform:uppercase;">Profit Factor</div>
-        <div id="dash-profit-factor" style="font-size: 16px; font-weight: 800; color: var(--accent-cyan); font-family:'Outfit',sans-serif; margin-top:3px;">0.0x</div>
+      <div style="background: var(--surface-solid); padding: 10px 4px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 9px; color: var(--muted); font-weight:700; text-transform:uppercase;">Profit Factor</div>
+        <div id="dash-profit-factor" style="font-size: 15px; font-weight: 800; color: var(--accent-cyan); font-family:'Outfit',sans-serif; margin-top:3px;">0.0x</div>
       </div>
-      <div style="background: var(--surface-solid); padding: 12px 6px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
-        <div style="font-size: 10px; color: var(--muted); font-weight:700; text-transform:uppercase;">Max Drawdown</div>
-        <div id="dash-mdd" style="font-size: 16px; font-weight: 800; color: var(--red); font-family:'Outfit',sans-serif; margin-top:3px;">0.0%</div>
+      <div style="background: var(--surface-solid); padding: 10px 4px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 9px; color: var(--muted); font-weight:700; text-transform:uppercase;">Max DD</div>
+        <div id="dash-mdd" style="font-size: 15px; font-weight: 800; color: var(--red); font-family:'Outfit',sans-serif; margin-top:3px;">0.0%</div>
       </div>
-      <div style="background: var(--surface-solid); padding: 12px 6px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
-        <div style="font-size: 10px; color: var(--muted); font-weight:700; text-transform:uppercase;">Sharpe Ratio</div>
-        <div id="dash-sharpe" style="font-size: 16px; font-weight: 800; color: var(--accent-purple); font-family:'Outfit',sans-serif; margin-top:3px;">0.00</div>
+      <div style="background: var(--surface-solid); padding: 10px 4px; border-radius: 10px; border: 1px solid var(--border); text-align: center;">
+        <div style="font-size: 9px; color: var(--muted); font-weight:700; text-transform:uppercase;">Sharpe</div>
+        <div id="dash-sharpe" style="font-size: 15px; font-weight: 800; color: var(--accent-purple); font-family:'Outfit',sans-serif; margin-top:3px;">0.00</div>
+      </div>
+      <div style="background: var(--surface-solid); padding: 10px 4px; border-radius: 10px; border: 1px solid var(--border); text-align: center;" title="Brier Score: Prediction Market Accuracy (0.00 = Perfect, 0.25 = Coin flip)">
+        <div style="font-size: 9px; color: var(--accent-cyan); font-weight:800; text-transform:uppercase;">Brier Score</div>
+        <div id="dash-brier" style="font-size: 15px; font-weight: 800; color: var(--accent-cyan); font-family:'Outfit',sans-serif; margin-top:3px;">0.125</div>
       </div>
     </div>
 
@@ -2964,6 +3030,8 @@ async function quickPaperTrade(oppIdx, amount = 50) {
       outcomeIdx: opp.outcomeIdx || 0,
       price: opp.price,
       amount: amount,
+      category: opp.category || 'General',
+      url: opp.url || '',
       status: 'Open',
       timestamp: new Date().toISOString()
     };

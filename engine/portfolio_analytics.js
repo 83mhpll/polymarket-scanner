@@ -140,6 +140,20 @@ export function calculatePortfolioAnalytics(startingBankroll = 1000) {
     pnlUsd: parseFloat(c.pnlUsd.toFixed(2))
   }));
 
+  // Brier Score calculation (Prediction Market Gold Standard Proper Scoring Rule: 0.0 is perfect, 0.25 is random coin-flip)
+  let brierScore = null;
+  let validBrierCount = 0;
+  let totalBrierSquared = 0;
+  closedTrades.forEach(t => {
+    const entryProb = parseFloat(t.price || t.entryPrice || 0.5);
+    const actualOutcome = (t.result === 'Win' || (t.pnl || 0) > 0) ? 1 : 0;
+    totalBrierSquared += Math.pow(entryProb - actualOutcome, 2);
+    validBrierCount++;
+  });
+  if (validBrierCount > 0) {
+    brierScore = parseFloat((totalBrierSquared / validBrierCount).toFixed(4));
+  }
+
   return {
     startingBankroll,
     currentEquity: parseFloat(currentEquity.toFixed(2)),
@@ -157,6 +171,7 @@ export function calculatePortfolioAnalytics(startingBankroll = 1000) {
     maxDrawdownPercent: parseFloat(maxDrawdownPct.toFixed(2)),
     maxDrawdownUsd: parseFloat(maxDrawdownUsd.toFixed(2)),
     sharpeRatio,
+    brierScore,
     equityCurve: equityPoints,
     categoryBreakdown,
     generatedAt: new Date().toISOString()
