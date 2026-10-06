@@ -1,0 +1,68 @@
+{
+  "weatherMarket": {
+    "conditionId": "0x4a8f912b79e831201fae29851726a8d793c9e6541f487e81a3d4615b39ad9182",
+    "tokenId": "8501497159083948713316135768103773293754490207922884688769443031624417212426",
+    "question": "Central Park Max Temp on Oct 15: 72.0°F to 73.9°F?",
+    "category": "weather",
+    "feeRate": 0.05,
+    "feeExponent": 1.0,
+    "bids": [
+      [0.61, 2400.0],
+      [0.60, 5000.0],
+      [0.59, 8200.0],
+      [0.58, 12000.0],
+      [0.57, 15000.0]
+    ],
+    "asks": [
+      [0.63, 1800.0],
+      [0.64, 4500.0],
+      [0.65, 7800.0],
+      [0.66, 11000.0],
+      [0.67, 16000.0]
+    ],
+    "hash": "0x981273abc1234def",
+    "timestamp": 1760563200000
+  },
+  "geopoliticsMarket": {
+    "conditionId": "0x112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00",
+    "tokenId": "1122334455667788990011223344556677889900112233445566778899001122",
+    "question": "UN Security Council Resolution on AI Safety Adopted in 2026?",
+    "category": "geopolitics",
+    "feeRate": 0.0,
+    "feeExponent": 1.0,
+    "bids": [
+      [0.22, 10000.0],
+      [0.21, 15000.0],
+      [0.20, 25000.0],
+      [0.19, 40000.0],
+      [0.18, 60000.0]
+    ],
+    "asks": [
+      [0.24, 8000.0],
+      [0.25, 14000.0],
+      [0.26, 22000.0],
+      [0.27, 35000.0],
+      [0.28, 50000.0]
+    ],
+    "hash": "0xaabbccddeeff0011",
+    "timestamp": 1760563200000
+  },
+  "thinMarket": {
+    "conditionId": "0x33445566778899aabbccddeeff00112233445566778899aabbccddeeff001122",
+    "tokenId": "3344556677889900112233445566778899001122334455667788990011223344",
+    "question": "Central Park Max Temp on Oct 15: Above 85.0°F?",
+    "category": "weather",
+    "feeRate": 0.05,
+    "feeExponent": 1.0,
+    "bids": [
+      [0.01, 50.0],
+      [0.005, 100.0]
+    ],
+    "asks": [
+      [0.04, 150.0],
+      [0.08, 200.0]
+    ],
+    "hash": "0x5566778899aabbcc",
+    "timestamp": 1760563200000
+  }
+}
