@@ -11,6 +11,7 @@ import { devig, devigMarket } from './devigging.js';
 import { calculateDynamicFee, calculateNetEdge } from './dynamic_fees.js';
 import { calculateFairProbability, generateSyntheticEnsemble, STATIONS } from './weather_fair_value.js';
 import { calculateOrderbookSlippage } from './clob_depth.js';
+import { InstitutionalRiskManager, riskManagerInstance } from './risk_manager.js';
 
 const __dir = path.dirname(fileURLToPath(import.meta.url));
 const BACKTEST_FILE = path.join(__dir, '..', 'backtest.json');
@@ -35,20 +36,32 @@ export const DEFAULT_BOT_CONFIG = {
 /**
  * Helper to safely read backtest ledger
  */
-function readLedger() {
+export function readLedger() {
   if (!fs.existsSync(BACKTEST_FILE)) return [];
   try {
-    return JSON.parse(fs.readFileSync(BACKTEST_FILE, 'utf-8'));
+    const raw = fs.readFileSync(BACKTEST_FILE, 'utf-8');
+    if (!raw.trim()) return [];
+    return JSON.parse(raw);
   } catch (e) {
     return [];
   }
 }
 
 /**
- * Helper to safely write backtest ledger
+ * Helper to safely write backtest ledger atomically
  */
-function writeLedger(data) {
-  fs.writeFileSync(BACKTEST_FILE, JSON.stringify(data, null, 2), 'utf-8');
+export function writeLedger(data) {
+  const dir = path.dirname(BACKTEST_FILE);
+  const tempFile = path.join(dir, `.backtest.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
+  try {
+    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
+    fs.renameSync(tempFile, BACKTEST_FILE);
+  } catch (err) {
+    if (fs.existsSync(tempFile)) {
+      try { fs.unlinkSync(tempFile); } catch (_) {}
+    }
+    throw err;
+  }
 }
 
 /**
@@ -161,8 +174,9 @@ export function simulatePassiveFill(orderType, orderPrice, orderSizeUsd, orderbo
  * Autonomous Paper-Trading Bot Class
  */
 export class AutonomousPaperBot {
-  constructor(config = {}) {
+  constructor(config = {}, riskManager = null) {
     this.config = { ...DEFAULT_BOT_CONFIG, ...config };
+    this._riskManager = riskManager || config?.riskManager || null;
     this.timer = null;
     this.isScanning = false;
     this.history = [];
@@ -174,6 +188,18 @@ export class AutonomousPaperBot {
       lastScanTime: null,
       errorsCount: 0
     };
+  }
+
+  get riskManager() {
+    if (!this._riskManager) {
+      this._riskManager = (typeof riskManagerInstance !== 'undefined' && riskManagerInstance)
+        || new InstitutionalRiskManager();
+    }
+    return this._riskManager;
+  }
+
+  set riskManager(rm) {
+    this._riskManager = rm;
   }
 
   /**
@@ -237,6 +263,10 @@ export class AutonomousPaperBot {
    */
   async runCycle(marketCandidates = []) {
     if (this.isScanning) return;
+    if (this.riskManager?.isKilled) {
+      console.warn('[PaperBot] Run cycle skipped: Risk Manager Hard Kill-Switch is ACTIVE.');
+      return;
+    }
     this.isScanning = true;
     this.stats.lastScanTime = new Date().toISOString();
 
@@ -258,6 +288,10 @@ export class AutonomousPaperBot {
       // 3. Evaluate each market for positive net edge
       for (const m of markets) {
         if (!this.config.enabled) break;
+        if (this.riskManager?.isKilled) {
+          console.warn('[PaperBot] Halting market evaluation: Risk Manager Kill-Switch activated.');
+          break;
+        }
 
         const evaluated = await this.evaluateMarket(m);
         if (evaluated && evaluated.shouldTrade) {
@@ -291,13 +325,17 @@ export class AutonomousPaperBot {
     if (isWeather) {
       try {
         const targetDate = market.targetDate || '2026-10-15';
-        const bracket = market.bracket || [65, 75];
+        let bracket = market.bracket || [65, 75];
+        // Bracket normalization: if market.bracket is an array [min, max], convert to object { min, max }
+        if (Array.isArray(bracket)) {
+          bracket = { min: bracket[0], max: bracket[1] };
+        }
         const ensemble = generateSyntheticEnsemble([targetDate], 70.0);
         const fairRes = calculateFairProbability(ensemble, targetDate, bracket, 'kde');
-        fairProb = fairRes.fairProbability;
+        fairProb = fairRes.fairProb;
         modelSource = 'Open-Meteo Ensemble NWP (82 members)';
       } catch (e) {
-        // Fallback to devigging
+        console.warn(`[PaperBot] Weather model evaluation failed for "${question}": ${e.message}. Falling back to devigging.`);
       }
     }
 
@@ -339,8 +377,29 @@ export class AutonomousPaperBot {
   /**
    * Execute paper order and persist to backtest.json
    */
-  async executePaperOrder(evaluated, ledger) {
-    const { question, outcome, marketPrice, fairProb, sizing, modelSource, slug } = evaluated;
+  async executePaperOrder(evaluated, ledger = null) {
+    const { question, outcome, marketPrice, fairProb, sizing, modelSource, slug, marketId } = evaluated;
+
+    const marketKey = slug || marketId || question;
+    const tradeSizeUsd = sizing.sizeUsd;
+    const bankroll = this.config.bankroll;
+
+    // Pre-Trade Risk Check
+    if (this.riskManager) {
+      const riskCheck = this.riskManager.checkPreTradeRisk(tradeSizeUsd, marketKey, bankroll);
+      if (!riskCheck.allowed) {
+        const reason = riskCheck.reason || 'Risk check failed';
+        console.warn(`[PaperBot Risk Rejection] Order rejected for "${question}": ${reason}`);
+        this.emit('trade_rejected', {
+          reason,
+          marketKey,
+          tradeSizeUsd,
+          question,
+          timestamp: new Date().toISOString()
+        });
+        return null;
+      }
+    }
 
     // Simulate fill execution
     const fillSim = simulatePassiveFill(this.config.executionMode, marketPrice, sizing.sizeUsd);
@@ -366,9 +425,15 @@ export class AutonomousPaperBot {
       note: `Autonomous Paper Bot (${modelSource} | Edge: +${sizing.netEdge}%)`
     };
 
-    // Add to ledger
-    ledger.unshift(paperTrade);
-    writeLedger(ledger);
+    // Re-read latest on-disk ledger so external changes (e.g. Kill-Switch cancellations) are never overwritten
+    const currentOnDisk = readLedger();
+    const updatedLedger = [paperTrade, ...currentOnDisk.filter(t => t.id !== paperTrade.id)];
+    writeLedger(updatedLedger);
+
+    // Keep passed in-memory array synchronized if provided
+    if (Array.isArray(ledger) && !ledger.some(t => t.id === paperTrade.id)) {
+      ledger.unshift(paperTrade);
+    }
 
     this.stats.tradesExecuted++;
     this.stats.totalVolumeUsd += sizing.sizeUsd;

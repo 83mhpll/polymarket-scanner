@@ -11,8 +11,11 @@ import { fileURLToPath } from 'url';
 import {
   calculateKellyPositionSize,
   simulatePassiveFill,
-  AutonomousPaperBot
+  AutonomousPaperBot,
+  readLedger,
+  writeLedger
 } from '../engine/paper_bot.js';
+import { InstitutionalRiskManager } from '../engine/risk_manager.js';
 
 const __dir = path.dirname(fileURLToPath(import.meta.url));
 const BACKTEST_FILE = path.join(__dir, '..', 'backtest.json');
@@ -25,6 +28,18 @@ let passedCount = 0;
 function test(name, fn) {
   try {
     fn();
+    console.log(`  ✓ ${name}`);
+    passedCount++;
+  } catch (e) {
+    console.error(`  ✗ ${name}`);
+    console.error(`    Error: ${e.message}`);
+    process.exit(1);
+  }
+}
+
+async function asyncTest(name, fn) {
+  try {
+    await fn();
     console.log(`  ✓ ${name}`);
     passedCount++;
   } catch (e) {
@@ -171,6 +186,186 @@ test('Bot status summary reflects metrics and open positions', () => {
   assert.strictEqual(typeof status.enabled, 'boolean');
   assert.strictEqual(typeof status.openPositionsCount, 'number');
   assert.strictEqual(typeof status.stats.totalEvaluated, 'number');
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Suite 4: Milestone M1 Remediation Regression Tests
+// ─────────────────────────────────────────────────────────────────
+console.log('\n[Suite 4] Milestone M1 Remediation Regression Tests');
+
+await asyncTest('Weather NWP: Bracket array [min, max] normalizes and uses Open-Meteo NWP model', async () => {
+  const bot = new AutonomousPaperBot({ minNetEdgePct: 0.1 });
+  const market = {
+    slug: 'nyc-high-temp-bracket-array',
+    question: 'Will NYC Central Park high temperature be between 65°F and 75°F on 2026-10-15?',
+    price: 0.40,
+    bracket: [65, 75],
+    targetDate: '2026-10-15'
+  };
+  const evaluated = await bot.evaluateMarket(market);
+  assert.ok(evaluated !== null, 'Market evaluation should not be null');
+  assert.strictEqual(evaluated.modelSource, 'Open-Meteo Ensemble NWP (82 members)');
+  assert.ok(typeof evaluated.fairProb === 'number');
+  assert.ok(evaluated.fairProb > 0 && evaluated.fairProb < 1);
+  assert.ok(!isNaN(evaluated.fairProb));
+});
+
+await asyncTest('Weather NWP: Object bracket {min, max} evaluates correctly with ensemble', async () => {
+  const bot = new AutonomousPaperBot({ minNetEdgePct: 0.1 });
+  const market = {
+    slug: 'nyc-high-temp-bracket-obj',
+    question: 'Will NYC Central Park high temperature be between 60°F and 70°F on 2026-10-15?',
+    price: 0.40,
+    bracket: { min: 60, max: 70 },
+    targetDate: '2026-10-15'
+  };
+  const evaluated = await bot.evaluateMarket(market);
+  assert.ok(evaluated !== null);
+  assert.strictEqual(evaluated.modelSource, 'Open-Meteo Ensemble NWP (82 members)');
+  assert.ok(evaluated.fairProb > 0 && evaluated.fairProb < 1);
+});
+
+await asyncTest('Weather NWP: Malformed weather data triggers diagnostic warning and falls back to Shin devig', async () => {
+  const bot = new AutonomousPaperBot({ minNetEdgePct: 0.1 });
+  const market = {
+    slug: 'invalid-weather-market',
+    question: 'Will NYC temperature be valid?',
+    price: 0.45,
+    bracket: {}, // Invalid bracket causes calculateFairProbability to throw
+    targetDate: '2026-10-15'
+  };
+  const evaluated = await bot.evaluateMarket(market);
+  assert.ok(evaluated !== null);
+  assert.strictEqual(evaluated.modelSource, 'Shin 1993 De-vigging');
+  assert.ok(evaluated.fairProb > 0 && evaluated.fairProb < 1);
+});
+
+await asyncTest('Risk Integration: Bot honors custom InstitutionalRiskManager instance in constructor', async () => {
+  const customRm = new InstitutionalRiskManager();
+  const bot = new AutonomousPaperBot({ riskManager: customRm });
+  assert.strictEqual(bot.riskManager, customRm);
+});
+
+await asyncTest('Risk Integration: runCycle() skips execution when riskManager is in Hard Kill-Switch state', async () => {
+  const customRm = new InstitutionalRiskManager();
+  customRm.isKilled = true;
+  const bot = new AutonomousPaperBot({ enabled: true, riskManager: customRm });
+  
+  let executedCount = 0;
+  bot.subscribe((event) => {
+    if (event === 'trade_executed') executedCount++;
+  });
+
+  await bot.runCycle();
+  assert.strictEqual(executedCount, 0, 'No trades should be executed when killed');
+  assert.strictEqual(bot.stats.tradesExecuted, 0);
+});
+
+await asyncTest('Risk Integration: executePaperOrder() blocks trade and does not persist when pre-trade check fails', async () => {
+  const customRm = new InstitutionalRiskManager({ maxGrossExposurePct: 1.0 }); // 1% gross limit
+  const bot = new AutonomousPaperBot({ bankroll: 10000, riskManager: customRm });
+
+  let rejectionEmitted = false;
+  bot.subscribe((event, data) => {
+    if (event === 'trade_rejected') {
+      rejectionEmitted = true;
+      assert.ok(data.reason.includes('gross exposure'));
+    }
+  });
+
+  const initialDisk = readLedger();
+  const initialCount = initialDisk.length;
+
+  const evaluated = {
+    slug: 'oversized-risk-trade',
+    question: 'Huge Trade Market',
+    outcome: 'YES',
+    marketPrice: 0.50,
+    fairProb: 0.80,
+    modelSource: 'Unit Test Fair Model',
+    sizing: {
+      sizeUsd: 500.0,
+      netEdge: 20.0,
+      kellyFractional: 0.20
+    }
+  };
+
+  const executed = await bot.executePaperOrder(evaluated);
+  assert.strictEqual(executed, null, 'executePaperOrder should return null on risk rejection');
+  assert.strictEqual(rejectionEmitted, true, 'trade_rejected event should be emitted');
+
+  const afterDisk = readLedger();
+  assert.strictEqual(afterDisk.length, initialCount, 'Disk ledger must not change on rejected trade');
+  assert.ok(!afterDisk.some(t => t.slug === 'oversized-risk-trade'));
+});
+
+await asyncTest('Ledger Concurrency: executePaperOrder() preserves Kill-Switch cancellations on disk', async () => {
+  const originalLedger = readLedger();
+  const cancelledOrderId = 'disk-cancelled-' + Date.now();
+  const cancelledOrder = {
+    id: cancelledOrderId,
+    slug: 'cancelled-order-test',
+    question: 'Cancelled Order Should Remain Cancelled',
+    outcome: 'YES',
+    price: 0.50,
+    size: 50,
+    status: 'Cancelled',
+    timestamp: new Date().toISOString(),
+    cancelledAt: new Date().toISOString(),
+    cancelReason: 'Emergency Kill-Switch: Concurrency Test'
+  };
+
+  try {
+    writeLedger([cancelledOrder, ...originalLedger]);
+
+    // Simulate in-memory stale ledger where order is still 'Open'
+    const staleInMemoryLedger = [{ ...cancelledOrder, status: 'Open' }, ...originalLedger];
+
+    const bot = new AutonomousPaperBot({ minNetEdgePct: 0.1 });
+    const newEvaluated = {
+      slug: 'concurrent-new-trade',
+      question: 'New Trade During Concurrency',
+      outcome: 'YES',
+      marketPrice: 0.45,
+      fairProb: 0.65,
+      modelSource: 'Unit Test Fair Model',
+      sizing: {
+        sizeUsd: 25.0,
+        netEdge: 10.0,
+        kellyFractional: 0.1
+      }
+    };
+
+    await bot.executePaperOrder(newEvaluated, staleInMemoryLedger);
+
+    // Check disk: cancelled order MUST still have status 'Cancelled'
+    const reloadedDisk = readLedger();
+    const checkOrder = reloadedDisk.find(t => t.id === cancelledOrderId);
+    assert.ok(checkOrder !== undefined);
+    assert.strictEqual(checkOrder.status, 'Cancelled', 'Cancelled status must not be overwritten by stale array');
+  } finally {
+    // Restore clean ledger
+    writeLedger(originalLedger);
+  }
+});
+
+await asyncTest('Atomic Persistence: writeLedger writes valid JSON atomically without temp file residue', () => {
+  const originalLedger = readLedger();
+  try {
+    const testData = [{ id: 'atomic-test', timestamp: new Date().toISOString() }];
+    writeLedger(testData);
+
+    const reloaded = readLedger();
+    assert.strictEqual(reloaded.length, 1);
+    assert.strictEqual(reloaded[0].id, 'atomic-test');
+
+    // Verify no orphaned .tmp files in project root
+    const dir = path.dirname(BACKTEST_FILE);
+    const tmpFiles = fs.readdirSync(dir).filter(f => f.startsWith('.backtest.') && f.endsWith('.tmp'));
+    assert.strictEqual(tmpFiles.length, 0, 'No .tmp files should be left after writeLedger');
+  } finally {
+    writeLedger(originalLedger);
+  }
 });
 
 console.log('===============================================================');

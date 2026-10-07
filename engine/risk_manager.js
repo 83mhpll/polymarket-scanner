@@ -20,17 +20,29 @@ export const DEFAULT_RISK_LIMITS = {
   minBankrollUsd: 1000             // Minimum bankroll floor
 };
 
-function readLedger() {
+export function readLedger() {
   if (!fs.existsSync(BACKTEST_FILE)) return [];
   try {
-    return JSON.parse(fs.readFileSync(BACKTEST_FILE, 'utf-8'));
+    const raw = fs.readFileSync(BACKTEST_FILE, 'utf-8');
+    if (!raw.trim()) return [];
+    return JSON.parse(raw);
   } catch (e) {
     return [];
   }
 }
 
-function writeLedger(data) {
-  fs.writeFileSync(BACKTEST_FILE, JSON.stringify(data, null, 2), 'utf-8');
+export function writeLedger(data) {
+  const dir = path.dirname(BACKTEST_FILE);
+  const tempFile = path.join(dir, `.backtest.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
+  try {
+    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
+    fs.renameSync(tempFile, BACKTEST_FILE);
+  } catch (err) {
+    if (fs.existsSync(tempFile)) {
+      try { fs.unlinkSync(tempFile); } catch (_) {}
+    }
+    throw err;
+  }
 }
 
 export class InstitutionalRiskManager {
@@ -56,8 +68,17 @@ export class InstitutionalRiskManager {
   /**
    * Evaluate full portfolio risk against institutional limits
    */
-  evaluatePortfolioRisk(bankroll = 10000) {
-    const ledger = readLedger();
+  evaluatePortfolioRisk(bankrollOrPositions = 10000, optionalBankroll = 10000) {
+    let bankroll = 10000;
+    let customPositions = null;
+    if (Array.isArray(bankrollOrPositions)) {
+      customPositions = bankrollOrPositions;
+      bankroll = typeof optionalBankroll === 'number' ? optionalBankroll : 10000;
+    } else if (typeof bankrollOrPositions === 'number') {
+      bankroll = bankrollOrPositions;
+    }
+
+    const ledger = customPositions || readLedger();
     const openPositions = ledger.filter(t => t.status === 'Open');
     const closedPositions = ledger.filter(t => t.status === 'Closed');
 
@@ -74,20 +95,28 @@ export class InstitutionalRiskManager {
 
     const grossExposurePct = (totalGrossExposureUsd / bankroll) * 100;
 
-    // 2. Calculate PnL & Peak Equity Drawdown
+    // 2. Calculate PnL & Peak-to-Trough Drawdown Chronologically
     let currentEquity = bankroll;
     let peakEquity = bankroll;
+    let maxDrawdownUsd = 0;
+    let maxDrawdownPct = 0;
 
-    closedPositions.forEach(t => {
+    const sortedTrades = [...closedPositions].sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+
+    sortedTrades.forEach(t => {
       const size = parseFloat(t.amount || t.size || 0);
       const pnlPct = parseFloat(t.pnl || 0);
-      const dollarPnL = (size * pnlPct) / 100;
+      const dollarPnL = t.pnlUsd !== undefined ? parseFloat(t.pnlUsd) : (size * pnlPct) / 100;
       currentEquity += dollarPnL;
       if (currentEquity > peakEquity) peakEquity = currentEquity;
+      const ddUsd = Math.max(0, peakEquity - currentEquity);
+      const ddPct = peakEquity > 0 ? (ddUsd / peakEquity) * 100 : 0;
+      if (ddUsd > maxDrawdownUsd) maxDrawdownUsd = ddUsd;
+      if (ddPct > maxDrawdownPct) maxDrawdownPct = ddPct;
     });
 
-    const drawdownUsd = Math.max(0, peakEquity - currentEquity);
-    const drawdownPct = peakEquity > 0 ? (drawdownUsd / peakEquity) * 100 : 0;
+    const drawdownUsd = maxDrawdownUsd;
+    const drawdownPct = maxDrawdownPct;
 
     // 3. Find Max Single Position Concentration
     let maxSingleExposureUsd = 0;
@@ -132,6 +161,7 @@ export class InstitutionalRiskManager {
         grossExposureUsd: parseFloat(totalGrossExposureUsd.toFixed(2)),
         grossExposurePct: parseFloat(grossExposurePct.toFixed(2)),
         openPositionsCount: openPositions.length,
+        positionConcentration,
         maxSingleExposureUsd: parseFloat(maxSingleExposureUsd.toFixed(2)),
         maxSinglePositionPct: parseFloat(maxSinglePositionPct.toFixed(2)),
         maxSingleMarket: maxSingleMarketKey
@@ -166,9 +196,10 @@ export class InstitutionalRiskManager {
       };
     }
 
-    const currentMarketExposure = currentRisk.metrics.maxSingleExposureUsd; // conservative
+    const currentMarketExposure = (marketKey && currentRisk.metrics.positionConcentration?.[marketKey]) || 0;
     const newSingleExposure = currentMarketExposure + tradeSizeUsd;
-    if ((newSingleExposure / bankroll) * 100 > this.limits.maxSinglePositionPct) {
+    const newSinglePct = (newSingleExposure / bankroll) * 100;
+    if (newSinglePct > this.limits.maxSinglePositionPct) {
       return {
         allowed: false,
         reason: `Exceeds single market concentration limit (${this.limits.maxSinglePositionPct}%)`
@@ -187,7 +218,9 @@ export class InstitutionalRiskManager {
     this.isKilled = true;
 
     // 1. Instantly stop Paper Bot loop
-    paperBotInstance.stop();
+    if (typeof paperBotInstance !== 'undefined' && paperBotInstance?.stop) {
+      paperBotInstance.stop();
+    }
 
     // 2. Cancel all pending / open orders in backtest.json
     const ledger = readLedger();
