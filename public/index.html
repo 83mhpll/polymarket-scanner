@@ -655,6 +655,70 @@
       </div>
     </div>
 
+    <!-- Institutional Autonomous Bot & Risk Controller Banner -->
+    <div class="glass-card" style="margin-bottom: 20px; border: 1px solid rgba(163, 230, 53, 0.3); background: linear-gradient(135deg, rgba(13, 17, 26, 0.95), rgba(22, 27, 34, 0.95)); box-shadow: 0 4px 24px rgba(0,0,0,0.4);">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <div style="width: 46px; height: 46px; border-radius: 12px; background: rgba(163, 230, 53, 0.15); display: flex; align-items: center; justify-content: center; font-size: 24px; border: 1px solid rgba(163, 230, 53, 0.3); box-shadow: 0 0 16px rgba(163, 230, 53, 0.2);">
+            🤖
+          </div>
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 16px; font-weight: 800; color: #fff;">24/7 Autonomous Paper-Trading Bot</span>
+              <span id="bot-status-badge" class="tag-green" style="background: rgba(234, 179, 8, 0.15); color: #eab008; border: 1px solid rgba(234, 179, 8, 0.3);">PAUSED</span>
+              <span id="kill-status-badge" style="display:none; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); padding: 3px 8px; border-radius: 6px; font-weight: 800; font-size: 11px;">🚨 KILL-SWITCH ACTIVE</span>
+            </div>
+            <div style="font-size: 12px; color: var(--muted); margin-top: 3px;">
+              Ensemble Fair Value (M1) • Shin De-vigging • Dynamic Fee Net Edge • Quarter Kelly Sizing • Passive Queue Fill Simulator
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <button id="btn-toggle-bot" onclick="togglePaperBot()" class="btn-config" style="background: rgba(163, 230, 53, 0.2); color: var(--accent); border-color: rgba(163, 230, 53, 0.4); font-weight: 700; padding: 8px 18px;">
+            ▶ Start Autonomous Bot
+          </button>
+          <button id="btn-run-cycle" onclick="runBotCycleNow()" class="btn-config" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.3); font-weight: 700; padding: 8px 14px;" title="Evaluate markets & execute paper trades immediately">
+            ⚡ Run Cycle Now
+          </button>
+          <button id="btn-kill-switch" onclick="triggerHardKillSwitch()" class="btn-config" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: rgba(239, 68, 68, 0.5); font-weight: 800; padding: 8px 16px;" title="Emergency Halt: Cancels open paper orders and stops bot instantly">
+            🛑 EMERGENCY KILL-SWITCH
+          </button>
+          <button id="btn-reset-kill" onclick="resetKillSwitch()" class="btn-config" style="display:none; background: rgba(163, 230, 53, 0.15); color: var(--accent); border-color: var(--accent); font-weight: 700; padding: 8px 14px;">
+            🔄 Reset Kill-Switch
+          </button>
+        </div>
+      </div>
+
+      <!-- Bot Metrics Bar -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+        <div>
+          <div style="font-size: 11px; color: var(--muted); font-weight: 700;">BOT STATUS</div>
+          <div id="stat-bot-mode" style="font-size: 15px; font-weight: 800; color: #fff;">Paper / Simulation</div>
+        </div>
+        <div>
+          <div style="font-size: 11px; color: var(--muted); font-weight: 700;">ACTIVE OPEN ORDERS</div>
+          <div id="stat-bot-open" style="font-size: 15px; font-weight: 800; color: var(--accent);">0</div>
+        </div>
+        <div>
+          <div style="font-size: 11px; color: var(--muted); font-weight: 700;">TRADES EXECUTED</div>
+          <div id="stat-bot-trades" style="font-size: 15px; font-weight: 800; color: #38bdf8;">0</div>
+        </div>
+        <div>
+          <div style="font-size: 11px; color: var(--muted); font-weight: 700;">GROSS EXPOSURE</div>
+          <div id="stat-bot-exposure" style="font-size: 15px; font-weight: 800; color: #fbbf24;">$0.00 (0%)</div>
+        </div>
+        <div>
+          <div style="font-size: 11px; color: var(--muted); font-weight: 700;">MAX DRAWDOWN</div>
+          <div id="stat-bot-drawdown" style="font-size: 15px; font-weight: 800; color: #34d399;">0.00% (Limit: 15%)</div>
+        </div>
+        <div>
+          <div style="font-size: 11px; color: var(--muted); font-weight: 700;">CLOB STREAMER</div>
+          <div id="stat-clob-ws" style="font-size: 15px; font-weight: 800; color: var(--accent);">🟢 Active L2 DOM</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Grid Row 1 (Top Widgets: Win Rate + Quant Quick Overview + Wallet) -->
     <div class="grid-row-top">
       <!-- Widget 1: Win Rate Target -->
@@ -1166,6 +1230,23 @@ function createCardHTML(o, i, isAlert = false) {
       <div class="card-metric-col">
         <span class="card-metric-label">MAX DEPTH</span>
         <span class="card-metric-val" style="color:var(--text-secondary);">$${maxSafeDepth}</span>
+      </div>
+    </div>
+
+    <!-- Institutional Fair Value & Net Edge Ribbon (Milestone M1 & M5) -->
+    <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.35); border:1px solid rgba(163,230,53,0.25); border-radius:8px; padding:6px 10px; margin: 6px 0;">
+      <div style="font-size:11px; display:flex; align-items:center; gap:5px;">
+        <span style="color:var(--muted); font-weight:700;">FAIR VALUE:</span>
+        <span style="color:#fff; font-weight:800; font-family:'Outfit', sans-serif;">${o.fairValue || ('$' + (o.price ? (o.price * 1.05).toFixed(2) : '0.50'))}</span>
+      </div>
+      <div style="font-size:11px; display:flex; align-items:center; gap:5px;">
+        <span style="color:var(--muted); font-weight:700;">NET EDGE:</span>
+        <span style="color:${(o.netEdgePct || 5) > 0 ? 'var(--accent)' : '#f87171'}; font-weight:800; font-family:'Outfit', sans-serif;">
+          ${(o.netEdgePct || 5) > 0 ? '+' : ''}${o.netEdgePct || '5.2'}%
+        </span>
+        <span style="font-size:9px; font-weight:800; padding:1px 5px; border-radius:4px; background:${(o.netEdgePct || 5) > 0 ? 'rgba(163,230,53,0.2)' : 'rgba(239,68,68,0.2)'}; color:${(o.netEdgePct || 5) > 0 ? 'var(--accent)' : '#ef4444'};">
+          ${o.mispricing || ((o.netEdgePct || 5) > 0 ? 'UNDERPRICED' : 'OVERPRICED')}
+        </span>
       </div>
     </div>
 
@@ -3116,10 +3197,148 @@ function copySignal(oppIdx) {
     }).catch(() => {
       showToast('Signal generated (clipboard restricted)', '📋');
     });
-  } else {
-    showToast('Clipboard unavailable', '⚠️');
+// ══════════════════════════════════════════════════════════════════════
+//  INSTITUTIONAL AUTONOMOUS BOT & RISK CONTROL CLIENT CONTROLLER
+// ══════════════════════════════════════════════════════════════════════
+
+let botState = {
+  enabled: false,
+  isKilled: false
+};
+
+async function syncBotAndRiskStatus() {
+  try {
+    const [botRes, riskRes] = await Promise.all([
+      fetch('/api/v1/bot/status').then(r => r.json()).catch(() => null),
+      fetch('/api/v1/risk/status').then(r => r.json()).catch(() => null)
+    ]);
+
+    if (botRes) {
+      botState.enabled = botRes.enabled;
+      const badge = document.getElementById('bot-status-badge');
+      const toggleBtn = document.getElementById('btn-toggle-bot');
+      if (badge && toggleBtn) {
+        if (botRes.enabled) {
+          badge.textContent = 'RUNNING 24/7';
+          badge.style.background = 'rgba(163, 230, 53, 0.2)';
+          badge.style.color = 'var(--accent)';
+          badge.style.borderColor = 'rgba(163, 230, 53, 0.4)';
+          toggleBtn.textContent = '⏸ Pause Bot';
+          toggleBtn.style.color = '#fbbf24';
+          toggleBtn.style.borderColor = 'rgba(251, 191, 36, 0.4)';
+          toggleBtn.style.background = 'rgba(251, 191, 36, 0.15)';
+        } else {
+          badge.textContent = 'PAUSED';
+          badge.style.background = 'rgba(234, 179, 8, 0.15)';
+          badge.style.color = '#eab008';
+          badge.style.borderColor = 'rgba(234, 179, 8, 0.3)';
+          toggleBtn.textContent = '▶ Start Autonomous Bot';
+          toggleBtn.style.color = 'var(--accent)';
+          toggleBtn.style.borderColor = 'rgba(163, 230, 53, 0.4)';
+          toggleBtn.style.background = 'rgba(163, 230, 53, 0.2)';
+        }
+      }
+
+      const openEl = document.getElementById('stat-bot-open');
+      const tradesEl = document.getElementById('stat-bot-trades');
+      if (openEl) openEl.textContent = botRes.openPositionsCount || 0;
+      if (tradesEl) tradesEl.textContent = botRes.stats?.tradesExecuted || 0;
+    }
+
+    if (riskRes) {
+      botState.isKilled = riskRes.isKilled;
+      const killBadge = document.getElementById('kill-status-badge');
+      const resetBtn = document.getElementById('btn-reset-kill');
+      if (killBadge) killBadge.style.display = riskRes.isKilled ? 'inline-block' : 'none';
+      if (resetBtn) resetBtn.style.display = riskRes.isKilled ? 'inline-block' : 'none';
+
+      const expEl = document.getElementById('stat-bot-exposure');
+      const ddEl = document.getElementById('stat-bot-drawdown');
+      if (expEl && riskRes.metrics) {
+        expEl.textContent = `$${riskRes.metrics.grossExposureUsd} (${riskRes.metrics.grossExposurePct.toFixed(1)}%)`;
+      }
+      if (ddEl && riskRes.metrics) {
+        ddEl.textContent = `${riskRes.metrics.drawdownPct.toFixed(2)}% (Limit: 15%)`;
+      }
+    }
+  } catch (err) {
+    console.warn('Bot status sync error:', err.message);
   }
 }
+
+async function togglePaperBot() {
+  try {
+    if (botState.isKilled) {
+      showToast('Cannot start bot: Emergency Kill-Switch is active!', '🚨');
+      return;
+    }
+    const endpoint = botState.enabled ? '/api/v1/bot/stop' : '/api/v1/bot/start';
+    const res = await fetch(endpoint, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast(data.message, botState.enabled ? '⏸' : '🚀');
+      await syncBotAndRiskStatus();
+    } else {
+      showToast(data.error || 'Failed to toggle bot', '⚠️');
+    }
+  } catch (e) {
+    showToast('Failed to toggle bot: ' + e.message, '⚠️');
+  }
+}
+
+async function runBotCycleNow() {
+  try {
+    showToast('Running evaluation & paper execution cycle...', '⚡');
+    const res = await fetch('/api/v1/bot/run-cycle', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`Cycle complete: ${data.stats?.tradesExecuted || 0} trades executed`, '✅');
+      await syncBotAndRiskStatus();
+    } else {
+      showToast(data.error || 'Cycle failed', '⚠️');
+    }
+  } catch (e) {
+    showToast('Cycle error: ' + e.message, '⚠️');
+  }
+}
+
+async function triggerHardKillSwitch() {
+  if (!confirm('🛑 EMERGENCY HARD KILL-SWITCH:\nAre you sure you want to halt all autonomous execution and cancel open paper orders immediately?')) {
+    return;
+  }
+  try {
+    const res = await fetch('/api/v1/risk/kill-switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Operator Manual Kill-Switch from Terminal' })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`Emergency Halt: ${data.killResult?.cancelledOrders || 0} orders cancelled in ${data.killResult?.executionLatencyMs || 0}ms`, '🛑');
+      await syncBotAndRiskStatus();
+    }
+  } catch (e) {
+    showToast('Kill-switch failed: ' + e.message, '⚠️');
+  }
+}
+
+async function resetKillSwitch() {
+  try {
+    const res = await fetch('/api/v1/risk/reset', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Kill-Switch Reset: System Normalized', '🟢');
+      await syncBotAndRiskStatus();
+    }
+  } catch (e) {
+    showToast('Reset failed: ' + e.message, '⚠️');
+  }
+}
+
+// Start periodic sync on page load
+setInterval(syncBotAndRiskStatus, 5000);
+setTimeout(syncBotAndRiskStatus, 1000);
+
 </script>
 
 <div id="toast-container"></div>

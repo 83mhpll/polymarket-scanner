@@ -26,6 +26,9 @@ import { analyzeAiMispricing } from "./engine/ai_probability.js";
 import { calculateOrderbookSlippage } from "./engine/clob_depth.js";
 import { scanManifoldCrossEdges } from "./engine/manifold_matcher.js";
 import { calculatePortfolioAnalytics } from "./engine/portfolio_analytics.js";
+import { paperBotInstance } from "./engine/paper_bot.js";
+import { riskManagerInstance } from "./engine/risk_manager.js";
+import { clobStreamerInstance } from "./engine/clob_streamer.js";
 
 // ─── Load .env ──────────────────────────────────────────────────────────
 const require = createRequire(import.meta.url);
@@ -112,6 +115,23 @@ async function backgroundScan() {
         console.log(`[Scanner] Fetched ${n} markets so far...`);
       }
     });
+    // Enrich opportunities with Quantitative Fair Value, Dynamic Fees & Net Edge
+    if (result.opportunities) {
+      result.opportunities = result.opportunities.map((opp) => {
+        const price = parseFloat(opp.price || 0.50);
+        const fairProb = opp.fairProb || (opp.score ? Math.min(0.95, Math.max(0.05, opp.score / 100)) : price);
+        const fee = 0.02 * price * (1 - price);
+        const netEdge = parseFloat(((fairProb - price - fee) * 100).toFixed(1));
+        return {
+          ...opp,
+          fairProb: parseFloat(fairProb.toFixed(3)),
+          fairValue: `$${fairProb.toFixed(2)}`,
+          netEdgePct: netEdge,
+          mispricing: netEdge > 3 ? "UNDERPRICED" : (netEdge < -3 ? "OVERPRICED" : "FAIR")
+        };
+      });
+    }
+
     const highConv = (result.opportunities || []).filter((o) => o.score >= 85);
     lastAlerts = highConv.slice(0, 20); // Store full objects for rich alerts
     cache = result;
@@ -313,6 +333,107 @@ async function handler(req, res) {
       const bankroll = parseFloat(q.get("bankroll") || "1000");
       const analytics = calculatePortfolioAnalytics(bankroll);
       ok(res, analytics);
+    } catch (e) {
+      err(res, e.message, 500);
+    }
+    return;
+  }
+
+  // ══ INSTITUTIONAL PAPER-TRADING BOT API ══════════════════════════════
+  if (url === "/api/v1/bot/status") {
+    ok(res, paperBotInstance.getStatus());
+    return;
+  }
+
+  if (url === "/api/v1/bot/start" && req.method === "POST") {
+    if (riskManagerInstance.isKilled) {
+      err(res, "Cannot start bot: Emergency Kill-Switch is ACTIVE. Reset Kill-Switch first.", 403);
+      return;
+    }
+    paperBotInstance.start();
+    ok(res, { success: true, message: "Autonomous Paper-Trading Bot Started", status: paperBotInstance.getStatus() });
+    return;
+  }
+
+  if (url === "/api/v1/bot/stop" && req.method === "POST") {
+    paperBotInstance.stop();
+    ok(res, { success: true, message: "Autonomous Paper-Trading Bot Paused", status: paperBotInstance.getStatus() });
+    return;
+  }
+
+  if (url === "/api/v1/bot/config") {
+    if (req.method === "GET") {
+      ok(res, paperBotInstance.config);
+      return;
+    }
+    if (req.method === "POST") {
+      const b = await readBody(req);
+      try {
+        const newCfg = JSON.parse(b);
+        paperBotInstance.updateConfig(newCfg);
+        ok(res, { success: true, config: paperBotInstance.config });
+      } catch (e) {
+        err(res, "Invalid config JSON");
+      }
+      return;
+    }
+  }
+
+  if (url === "/api/v1/bot/run-cycle" && req.method === "POST") {
+    if (riskManagerInstance.isKilled) {
+      err(res, "Cannot run cycle: Emergency Kill-Switch is ACTIVE.", 403);
+      return;
+    }
+    await paperBotInstance.runCycle(cache?.rawMarkets || []);
+    ok(res, { success: true, message: "Evaluation and Paper Execution Cycle Completed", stats: paperBotInstance.stats });
+    return;
+  }
+
+  // ══ INSTITUTIONAL RISK & KILL-SWITCH API ═══════════════════════════════
+  if (url === "/api/v1/risk/status") {
+    const q = new URLSearchParams(req.url.split("?")[1] || "");
+    const bankroll = parseFloat(q.get("bankroll") || String(paperBotInstance.config.bankroll || 10000));
+    ok(res, riskManagerInstance.evaluatePortfolioRisk(bankroll));
+    return;
+  }
+
+  if (url === "/api/v1/risk/kill-switch" && req.method === "POST") {
+    const b = await readBody(req);
+    let reason = "Manual Emergency Kill-Switch Activated via Terminal UI";
+    try {
+      if (b) {
+        const parsed = JSON.parse(b);
+        if (parsed.reason) reason = parsed.reason;
+      }
+    } catch (e) {}
+
+    const killResult = riskManagerInstance.triggerKillSwitch(reason);
+    ok(res, { success: true, killResult });
+    return;
+  }
+
+  if (url === "/api/v1/risk/reset" && req.method === "POST") {
+    const resetResult = riskManagerInstance.resetKillSwitch("Terminal Operator");
+    ok(res, { success: true, resetResult });
+    return;
+  }
+
+  // ══ REAL-TIME CLOB STREAMER API ════════════════════════════════════════
+  if (url === "/api/v1/clob/stream-status") {
+    ok(res, clobStreamerInstance.getStatus());
+    return;
+  }
+
+  if (url === "/api/v1/clob/live-depth") {
+    try {
+      const q = new URLSearchParams(req.url.split("?")[1] || "");
+      const tokenId = q.get("token_id");
+      if (!tokenId) {
+        err(res, "Missing token_id parameter", 400);
+        return;
+      }
+      const depth = await clobStreamerInstance.getLiveDepth(tokenId);
+      ok(res, depth);
     } catch (e) {
       err(res, e.message, 500);
     }
