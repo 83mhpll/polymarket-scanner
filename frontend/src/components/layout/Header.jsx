@@ -12,6 +12,8 @@ export default function Header() {
     resetKillSwitch,
     wallet,
     engineLatencyMs,
+    sidebarOpen,
+    setSidebarOpen,
   } = useTrading();
 
   const handleKillSwitch = async () => {
@@ -39,6 +41,14 @@ export default function Header() {
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         {/* Left: Branding & Status */}
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="lg:hidden p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition"
+            title="Toggle Menu Sidebar"
+          >
+            ☰
+          </button>
+
           <div className="relative flex items-center justify-center">
             <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>

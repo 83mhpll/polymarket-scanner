@@ -56,6 +56,31 @@ export function TradingProvider({ children }) {
   const [wsStatus, setWsStatus] = useState('connected');
   const [engineLatencyMs, setEngineLatencyMs] = useState(18.4);
 
+  // Active Sidebar Nav Tab: 'all' | 'cross' | 'manifold' | 'smartmoney' | 'aimodel' | 'dust' | 'negrisk' | 'whale'
+  const [activeTab, setActiveTab] = useState('all');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [portfolioModalOpen, setPortfolioModalOpen] = useState(false);
+  const [alertsModalOpen, setAlertsModalOpen] = useState(false);
+  const [watchlist, setWatchlist] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pm_watchlist');
+      return saved ? JSON.parse(saved) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+
+  const toggleWatchlist = useCallback((id) => {
+    setWatchlist(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      try { localStorage.setItem('pm_watchlist', JSON.stringify(next)); } catch (_) {}
+      return next;
+    });
+  }, []);
+
+  const openPortfolioModal = useCallback(() => setPortfolioModalOpen(true), []);
+  const closePortfolioModal = useCallback(() => setPortfolioModalOpen(false), []);
+
   // Modal and Order State
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [selectedOpportunity, setSelectedOpportunity] = useState(null);
@@ -252,6 +277,23 @@ export function TradingProvider({ children }) {
     liveDepth,
     isDepthLoading,
 
+    // Navigation & Strategy Filters
+    activeTab,
+    setActiveTab,
+    sidebarOpen,
+    setSidebarOpen,
+
+    // Portfolio & Alerts Modals
+    portfolioModalOpen,
+    openPortfolioModal,
+    closePortfolioModal,
+    alertsModalOpen,
+    setAlertsModalOpen,
+
+    // Watchlist
+    watchlist,
+    toggleWatchlist,
+
     // Wallet
     wallet,
   }), [
@@ -279,6 +321,14 @@ export function TradingProvider({ children }) {
     closeOrderModal,
     liveDepth,
     isDepthLoading,
+    activeTab,
+    sidebarOpen,
+    portfolioModalOpen,
+    openPortfolioModal,
+    closePortfolioModal,
+    alertsModalOpen,
+    watchlist,
+    toggleWatchlist,
     wallet,
   ]);
 

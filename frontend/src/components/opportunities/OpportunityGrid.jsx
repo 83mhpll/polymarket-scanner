@@ -11,7 +11,7 @@ const SORT_OPTIONS = [
 ];
 
 export default function OpportunityGrid() {
-  const { opportunities, loading, error, refreshOpportunities } = useTrading();
+  const { opportunities, loading, error, refreshOpportunities, activeTab, setActiveTab, watchlist } = useTrading();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState('score');
@@ -29,6 +29,15 @@ export default function OpportunityGrid() {
   const filteredOpportunities = useMemo(() => {
     return (opportunities || [])
       .filter((opp) => {
+        // Strategy filter based on active sidebar tab
+        if (activeTab === 'negrisk' && !opp.negRisk) return false;
+        if (activeTab === 'dust' && (opp.currentPrice || opp.price || 0.5) > 0.05) return false;
+        if (activeTab === 'cross' && (!opp.netEdgePct || opp.netEdgePct <= 5) && opp.category !== 'Crypto') return false;
+        if (activeTab === 'smartmoney' && (opp.score || 0) < 80) return false;
+        if (activeTab === 'aimodel' && !opp.mispricing?.detected) return false;
+        if (activeTab === 'whale' && (opp.vol24hr || 0) < 50000) return false;
+        if (activeTab === 'watchlist' && !(watchlist || []).includes(opp.tokenID || opp.question)) return false;
+
         const matchesCategory =
           selectedCategory === 'All' ||
           (opp.category && opp.category.toLowerCase().includes(selectedCategory.toLowerCase()));
@@ -57,10 +66,27 @@ export default function OpportunityGrid() {
         }
         return 0;
       });
-  }, [opportunities, selectedCategory, searchTerm, sortBy]);
+  }, [opportunities, activeTab, watchlist, selectedCategory, searchTerm, sortBy]);
 
   return (
     <div className="w-full">
+      {/* Active Sidebar Strategy Indicator */}
+      {activeTab !== 'all' && (
+        <div className="mb-4 px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs font-mono">
+          <div className="flex items-center space-x-2">
+            <span className="text-emerald-400 font-bold">🎯 STRATEGY FILTER:</span>
+            <span className="text-zinc-100 font-semibold uppercase">{activeTab}</span>
+            <span className="text-zinc-500">({filteredOpportunities.length} matches found)</span>
+          </div>
+          <button
+            onClick={() => setActiveTab('all')}
+            className="text-xs text-zinc-400 hover:text-emerald-400 underline transition font-medium"
+          >
+            ✕ Reset to All Opportunities
+          </button>
+        </div>
+      )}
+
       {/* Controls Bar: Search, Category Filters, Sort, Refresh */}
       <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3.5 mb-5 flex flex-col md:flex-row md:items-center justify-between gap-3 font-mono text-xs">
         {/* Left: Search input */}

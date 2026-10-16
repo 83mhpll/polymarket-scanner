@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTrading } from '../../context/TradingContext';
 
 export default function OpportunityCard({ opportunity }) {
-  const { openOrderModal } = useTrading();
+  const { openOrderModal, watchlist, toggleWatchlist } = useTrading();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const opp = opportunity || {};
@@ -63,6 +63,21 @@ export default function OpportunityCard({ opportunity }) {
         {/* Header Ribbon: Category, Flags, Score */}
         <div className="flex items-center justify-between text-xs font-mono mb-2.5">
           <div className="flex items-center space-x-1.5">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (toggleWatchlist) toggleWatchlist(opp.tokenID || opp.question);
+              }}
+              className={`text-sm px-1 transition ${
+                (watchlist || []).includes(opp.tokenID || opp.question)
+                  ? 'text-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.6)]'
+                  : 'text-zinc-600 hover:text-zinc-400'
+              }`}
+              title={(watchlist || []).includes(opp.tokenID || opp.question) ? 'Starred in Watchlist' : 'Add to Watchlist'}
+            >
+              {(watchlist || []).includes(opp.tokenID || opp.question) ? '★' : '☆'}
+            </button>
+
             <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] font-semibold uppercase tracking-wider">
               {category}
             </span>

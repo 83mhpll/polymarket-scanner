@@ -1,10 +1,12 @@
 import React from 'react';
 import { TradingProvider } from './context/TradingContext';
 import Header from './components/layout/Header';
+import Sidebar from './components/layout/Sidebar';
 import StatsBar from './components/layout/StatsBar';
 import BotControlBar from './components/bot/BotControlBar';
 import OpportunityGrid from './components/opportunities/OpportunityGrid';
 import OrderModal from './components/order/OrderModal';
+import PortfolioModal from './components/portfolio/PortfolioModal';
 
 function MainTerminal() {
   return (
@@ -12,20 +14,27 @@ function MainTerminal() {
       {/* Top Header */}
       <Header />
 
-      {/* Main Terminal Shell */}
-      <main className="flex-1 p-4 sm:p-6 max-w-7xl mx-auto w-full">
-        {/* Macro Telemetry Strip */}
-        <StatsBar />
+      {/* Main Terminal Shell with Sidebar Navigation */}
+      <div className="flex-1 flex w-full">
+        <Sidebar />
 
-        {/* 24/7 Autonomous Bot Control Panel */}
-        <BotControlBar />
+        <main className="flex-1 p-4 sm:p-6 max-w-7xl mx-auto w-full overflow-x-hidden">
+          {/* Macro Telemetry Strip */}
+          <StatsBar />
 
-        {/* Opportunity Scanner Feed */}
-        <OpportunityGrid />
+          {/* 24/7 Autonomous Bot Control Panel */}
+          <BotControlBar />
 
-        {/* Order Execution Modal */}
-        <OrderModal />
-      </main>
+          {/* Opportunity Scanner Feed */}
+          <OpportunityGrid />
+
+          {/* Order Execution Modal */}
+          <OrderModal />
+
+          {/* Portfolio & Orders Modal */}
+          <PortfolioModal />
+        </main>
+      </div>
 
       {/* Institutional Footer */}
       <footer className="border-t border-zinc-800/80 bg-zinc-900/60 px-6 py-4 mt-8">
