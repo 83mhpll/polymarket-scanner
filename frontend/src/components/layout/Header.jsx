@@ -57,6 +57,15 @@ export default function Header() {
             <span className="text-emerald-400">⚡</span>
             <span>{engineLatencyMs || 18.4}ms CLOB</span>
           </div>
+
+          <a
+            href="/classic"
+            className="flex items-center space-x-1 px-2.5 py-1 rounded bg-emerald-950/50 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 text-[11px] font-mono font-semibold transition-colors"
+            title="Switch to Classic Terminal with full Sidebar Menu"
+          >
+            <span>🏛️</span>
+            <span className="hidden sm:inline">Classic Menu UI</span>
+          </a>
         </div>
 
         {/* Center: Market Summary */}

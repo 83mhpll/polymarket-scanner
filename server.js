@@ -680,7 +680,9 @@ async function handler(req, res) {
 
     // 1. Determine requested file path
     let filePath;
-    if (url === "/" || url === "/index.html") {
+    if (url === "/classic" || url === "/legacy") {
+      filePath = path.join(PUBLIC_DIR, "index.html");
+    } else if (url === "/" || url === "/index.html") {
       filePath = fs.existsSync(path.join(DIST_DIR, "index.html"))
         ? path.join(DIST_DIR, "index.html")
         : path.join(PUBLIC_DIR, "index.html");
