@@ -59,25 +59,33 @@ export async function calculateOrderbookSlippage(tokenId, targetUsd = 100) {
       return { error: 'CLOB API orderbook unavailable' };
     }
 
-    const bids = bookRes.bids || [];
-    const asks = bookRes.asks || [];
+    // Sort bids descending (highest price first) & asks ascending (lowest price first)
+    const sortedBids = (bookRes.bids || [])
+      .map(b => ({ price: parseFloat(b.price), size: parseFloat(b.size) }))
+      .filter(b => !isNaN(b.price) && !isNaN(b.size) && b.price > 0 && b.size > 0)
+      .sort((a, b) => b.price - a.price);
 
-    const bestBid = bids.length ? parseFloat(bids[0].price) : 0;
-    const bestAsk = asks.length ? parseFloat(asks[0].price) : 1;
-    const spread = bestAsk > 0 ? parseFloat((bestAsk - bestBid).toFixed(4)) : 0;
+    const sortedAsks = (bookRes.asks || [])
+      .map(a => ({ price: parseFloat(a.price), size: parseFloat(a.size) }))
+      .filter(a => !isNaN(a.price) && !isNaN(a.size) && a.price > 0 && a.size > 0)
+      .sort((a, b) => a.price - b.price);
+
+    const bestBid = sortedBids.length ? sortedBids[0].price : 0;
+    const bestAsk = sortedAsks.length ? sortedAsks[0].price : 1;
+    const spread = bestAsk > 0 ? parseFloat(Math.max(0, bestAsk - bestBid).toFixed(4)) : 0;
     const spreadPct = bestAsk > 0 ? parseFloat(((spread / bestAsk) * 100).toFixed(2)) : 0;
     const midpoint = parseFloat(((bestBid + bestAsk) / 2).toFixed(4));
 
     // Construct 5-level Depth Ladder (DOM)
-    const ladderAsks = asks.slice(0, 5).map(l => ({
-      price: parseFloat(l.price),
-      size: parseFloat(l.size),
-      depthUsd: parseFloat((parseFloat(l.price) * parseFloat(l.size)).toFixed(2))
+    const ladderAsks = sortedAsks.slice(0, 5).map(l => ({
+      price: l.price,
+      size: l.size,
+      depthUsd: parseFloat((l.price * l.size).toFixed(2))
     }));
-    const ladderBids = bids.slice(0, 5).map(l => ({
-      price: parseFloat(l.price),
-      size: parseFloat(l.size),
-      depthUsd: parseFloat((parseFloat(l.price) * parseFloat(l.size)).toFixed(2))
+    const ladderBids = sortedBids.slice(0, 5).map(l => ({
+      price: l.price,
+      size: l.size,
+      depthUsd: parseFloat((l.price * l.size).toFixed(2))
     }));
 
     // Simulate BUY order across asks ladder
@@ -85,10 +93,10 @@ export async function calculateOrderbookSlippage(tokenId, targetUsd = 100) {
     let totalSharesFilled = 0;
     let totalSpentUsd = 0;
 
-    for (const level of asks) {
+    for (const level of sortedAsks) {
       if (remainingUsd <= 0) break;
-      const price = parseFloat(level.price);
-      const sharesAvailable = parseFloat(level.size);
+      const price = level.price;
+      const sharesAvailable = level.size;
       const levelCost = sharesAvailable * price;
 
       if (remainingUsd >= levelCost) {
@@ -116,11 +124,11 @@ export async function calculateOrderbookSlippage(tokenId, targetUsd = 100) {
 
     // Calculate maximum safe fill size before slippage exceeds 1.5%
     let maxSafeFillUsd = 0;
-    for (const level of asks) {
-      const price = parseFloat(level.price);
+    for (const level of sortedAsks) {
+      const price = level.price;
       const levelSlip = ((price - bestAsk) / bestAsk) * 100;
       if (levelSlip <= 1.5) {
-        maxSafeFillUsd += parseFloat(level.size) * price;
+        maxSafeFillUsd += level.size * price;
       } else {
         break;
       }
@@ -149,8 +157,10 @@ export async function calculateOrderbookSlippage(tokenId, targetUsd = 100) {
       maxSafeFillUsd: Math.round(maxSafeFillUsd),
       ladderAsks: ladderAsks,
       ladderBids: ladderBids,
-      bidsDepthCount: bids.length,
-      asksDepthCount: asks.length,
+      bids: ladderBids,
+      asks: ladderAsks,
+      bidsDepthCount: sortedBids.length,
+      asksDepthCount: sortedAsks.length,
       timestamp: new Date().toISOString()
     };
   } catch (err) {

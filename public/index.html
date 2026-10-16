@@ -633,7 +633,7 @@
     <div class="top-bar">
       <div class="search-box">
         <span class="search-icon">🔍</span>
-        <input type="text" id="search-input" placeholder="Search markets... (e.g. BTC, Election, Fed) ⌘K" oninput="applyFilters()">
+        <input type="text" id="search-input" placeholder="Search markets... (e.g. BTC, Election, Fed) ⌘K" oninput="debouncedApplyFilters()">
         <span class="search-kbd">⌘K</span>
       </div>
 
@@ -1107,6 +1107,12 @@ function scoreClass(s){return s>=75?'score-high':s>=60?'score-mid':'score-low';}
 function rankBadge(i){return i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span style="font-size:13px;color:var(--muted)">${i+1}.</span>`;}
 
 let currentOpps = [];
+let currentAlerts = [];
+let searchDebounceTid = null;
+function debouncedApplyFilters() {
+  clearTimeout(searchDebounceTid);
+  searchDebounceTid = setTimeout(applyFilters, 150);
+}
 
 function createCardHTML(o, i, isAlert = false) {
   const safeQuestion = escapeHTML(o.question);
@@ -1181,8 +1187,8 @@ function createCardHTML(o, i, isAlert = false) {
 
       <!-- Quick Action Icons Cluster + Conviction Score -->
       <div style="display:flex; align-items:center; gap:6px;">
-        <button class="card-action-icon" onclick="copySignal(${i})" title="Copy Signal to Clipboard">📋</button>
-        <button class="card-action-icon" id="wl-btn-${i}" onclick="quickWatchlistToggle(${i}, this)" title="Add / Remove Watchlist">⭐</button>
+        <button class="card-action-icon" onclick="copySignal(${i}, ${isAlert})" title="Copy Signal to Clipboard">📋</button>
+        <button class="card-action-icon" id="wl-btn-${i}" onclick="quickWatchlistToggle(${i}, this, ${isAlert})" title="Add / Remove Watchlist">⭐</button>
         <div class="card-score-badge" style="background:${scoreBadgeBg}; border:1px solid ${scoreBadgeBorder}; color:${scoreBadgeColor};" title="Conviction Score (0-100)">
           ⚡ ${scoreVal}
         </div>
@@ -1245,7 +1251,7 @@ function createCardHTML(o, i, isAlert = false) {
           ${(o.netEdgePct || 5) > 0 ? '+' : ''}${o.netEdgePct || '5.2'}%
         </span>
         <span style="font-size:9px; font-weight:800; padding:1px 5px; border-radius:4px; background:${(o.netEdgePct || 5) > 0 ? 'rgba(163,230,53,0.2)' : 'rgba(239,68,68,0.2)'}; color:${(o.netEdgePct || 5) > 0 ? 'var(--accent)' : '#ef4444'};">
-          ${o.mispricing || ((o.netEdgePct || 5) > 0 ? 'UNDERPRICED' : 'OVERPRICED')}
+          ${o.edgeLabel || (typeof o.mispricing === 'string' ? o.mispricing : ((o.netEdgePct || 5) > 0 ? 'UNDERPRICED' : 'OVERPRICED'))}
         </span>
       </div>
     </div>
@@ -1268,7 +1274,7 @@ function createCardHTML(o, i, isAlert = false) {
     </div>
 
     <!-- Phase 3: Mispricing Alert Banner -->
-    ${o.mispricing ? `
+    ${(o.mispricing && o.mispricing.signal) ? `
     <div style="margin: 4px 0 8px; padding: 7px 11px; border-radius: 10px;
       background: ${o.mispricing.signal === 'OVERBOUGHT' ? 'rgba(248,113,113,0.10)' : 'rgba(52,211,153,0.10)'};
       border: 1px solid ${o.mispricing.signal === 'OVERBOUGHT' ? 'rgba(248,113,113,0.30)' : 'rgba(52,211,153,0.30)'};
@@ -1314,7 +1320,7 @@ function createCardHTML(o, i, isAlert = false) {
       <div style="font-size:11px; color:var(--text-secondary); line-height:1.5; margin-bottom:8px;">
         ${(o.rationale || []).map(r => `<div style="margin-bottom:4px; display:flex; gap:6px;"><span>${r.icon}</span><span>${escapeHTML(r.text)}</span></div>`).join('')}
       </div>
-      ${o.mispricing ? `
+      ${(o.mispricing && o.mispricing.baseRate !== undefined) ? `
       <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:10px; color:var(--muted); margin-top:6px;">
         <b>Base Rate Analysis:</b> Cat: ${escapeHTML(o.category)} | Base rate ~${Math.round(o.mispricing.baseRate*100)}% | Implied Market: ${Math.round(o.price*100)}% (Gap: ${o.mispricing.gap > 0 ? '+' : ''}${Math.round(o.mispricing.gap*100)}%)
       </div>` : ''}
@@ -1338,16 +1344,16 @@ function createCardHTML(o, i, isAlert = false) {
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; flex:1;">
         <button class="btn-bet yes" 
                 style="${isYesTarget ? 'box-shadow: 0 0 18px rgba(163,230,53,0.45); border: 2px solid rgba(255,255,255,0.9);' : 'opacity:0.85;'}"
-                onclick="openOrderModalByIndex(${i}, 'YES')">
+                onclick="openOrderModalByIndex(${i}, 'YES', ${isAlert})">
           🟢 Buy YES ${centYes}¢ ${isYesTarget ? '🔥' : ''}
         </button>
         <button class="btn-bet no" 
                 style="${!isYesTarget ? 'box-shadow: 0 0 18px rgba(248,113,113,0.45); border: 2px solid rgba(255,255,255,0.9);' : 'opacity:0.85;'}"
-                onclick="openOrderModalByIndex(${i}, 'NO')">
+                onclick="openOrderModalByIndex(${i}, 'NO', ${isAlert})">
           🔴 Buy NO ${centNo}¢ ${!isYesTarget ? '🔥' : ''}
         </button>
       </div>
-      <button class="btn-quick-sim" onclick="quickPaperTrade(${i}, 50)" title="1-Click Sim: Log $50 Paper Trade">
+      <button class="btn-quick-sim" onclick="quickPaperTrade(${i}, 50, ${isAlert})" title="1-Click Sim: Log $50 Paper Trade">
         📝 Sim $50
       </button>
     </div>
@@ -2016,16 +2022,17 @@ function drawOrderShareChart(price) {
   ctx.stroke();
 }
 
-function openOrderModalByIndex(idx, outcomeSide = 'YES') {
-  const opp = currentOpps[idx];
+function openOrderModalByIndex(idx, outcomeSide = 'YES', isAlert = false) {
+  const pool = isAlert ? currentAlerts : currentOpps;
+  const opp = pool[idx];
   if (!opp) return;
   const p = parseFloat(opp.price);
   const isYes = outcomeSide.toUpperCase() === 'YES';
   const targetPrice = isYes ? p : parseFloat((1 - p).toFixed(3));
-  openOrderModal(opp.question, outcomeSide, targetPrice, opp.url, opp.tokenID || '');
+  openOrderModal(opp.question, outcomeSide, targetPrice, opp.url, opp.tokenID || '', opp);
 }
 
-function openOrderModal(question, outcome, price, marketUrl, tokenID = '') {
+function openOrderModal(question, outcome, price, marketUrl, tokenID = '', opp = null) {
   // If arguments were URI encoded, decode them safely
   if (typeof question === 'string') {
     try { question = decodeURIComponent(question); } catch(e){}
@@ -2039,13 +2046,22 @@ function openOrderModal(question, outcome, price, marketUrl, tokenID = '') {
 
   const normOutcome = outcome.toUpperCase() === 'NO' ? 'NO' : 'YES';
   const p = parseFloat(price);
+
+  let yesTokenID = (opp && opp.yesTokenID) ? opp.yesTokenID : (normOutcome === 'YES' ? tokenID : '');
+  let noTokenID = (opp && opp.noTokenID) ? opp.noTokenID : (normOutcome === 'NO' ? tokenID : '');
+  let activeTokenID = tokenID;
+  if (normOutcome === 'YES' && yesTokenID) activeTokenID = yesTokenID;
+  if (normOutcome === 'NO' && noTokenID) activeTokenID = noTokenID;
+
   currentActiveOrder = { 
     question, 
     outcome: normOutcome, 
     price: p, 
     baseYesPrice: normOutcome === 'YES' ? p : (1 - p),
     marketUrl,
-    tokenID: tokenID || ''
+    tokenID: activeTokenID,
+    yesTokenID,
+    noTokenID
   };
   
   document.getElementById('order-market-title').textContent = question;
@@ -2089,6 +2105,11 @@ function switchOrderOutcome(newOutcome) {
   const isYes = newOutcome.toUpperCase() === 'YES';
   currentActiveOrder.outcome = isYes ? 'YES' : 'NO';
   currentActiveOrder.price = isYes ? currentActiveOrder.baseYesPrice : parseFloat((1 - currentActiveOrder.baseYesPrice).toFixed(3));
+  if (isYes && currentActiveOrder.yesTokenID) {
+    currentActiveOrder.tokenID = currentActiveOrder.yesTokenID;
+  } else if (!isYes && currentActiveOrder.noTokenID) {
+    currentActiveOrder.tokenID = currentActiveOrder.noTokenID;
+  }
   
   if (isYes) {
     document.getElementById('order-toggle-yes').classList.add('active');
@@ -2160,41 +2181,53 @@ async function fetchLiveClobTelemetry(tokenId, amt) {
 
   statusEl.textContent = 'Fetching L2 depth & dynamic fee...';
   try {
-    const res = await fetch(`/api/v1/clob/depth?token_id=${encodeURIComponent(tokenId)}&amount=${amt}`);
+    const res = await fetch(`/api/v1/clob/live-depth?token_id=${encodeURIComponent(tokenId)}&amount=${amt}`);
     const d = await res.json();
     if (d && d.success) {
-      statusEl.textContent = `🟢 Live CLOB (${d.asksDepthCount} levels) • Dynamic Fee Sync`;
-      bidAskEl.textContent = `${(d.bestBid*100).toFixed(0)}¢ / ${(d.bestAsk*100).toFixed(0)}¢ (${d.spreadPercent}%)`;
+      statusEl.textContent = `🟢 Live CLOB (${d.asksDepthCount || 5} levels) • Dynamic Fee Sync`;
+      const bestBid = d.bestBid ?? 0.50;
+      const bestAsk = d.bestAsk ?? 0.52;
+      const spreadPct = d.spreadPercent !== undefined ? d.spreadPercent : ((bestAsk > 0 ? ((bestAsk - bestBid) / bestAsk) * 100 : 0).toFixed(1));
+      bidAskEl.textContent = `${(bestBid*100).toFixed(0)}¢ / ${(bestAsk*100).toFixed(0)}¢ (${spreadPct}%)`;
       
-      const isHighSlip = d.slippagePercent > 1.5;
-      slipEl.textContent = `${d.slippagePercent > 0 ? '+' : ''}${d.slippagePercent}% (Avg: ${d.effectiveCent}¢)`;
+      const isHighSlip = (d.slippagePercent || 0) > 1.5;
+      slipEl.textContent = `${d.slippagePercent > 0 ? '+' : ''}${d.slippagePercent || 0}% (Avg: ${d.effectiveCent || (bestAsk * 100).toFixed(1)}¢)`;
       slipEl.style.color = isHighSlip ? '#f87171' : '#34d399';
 
       if (feeEl) {
-        feeEl.textContent = `${d.feeRatePercent}% (${d.feeRateBps} bps)`;
-        feeEl.style.color = d.feeRateBps > 0 ? '#c084fc' : '#a3e635';
+        feeEl.textContent = `${d.feeRatePercent || 0}% (${d.feeRateBps || 0} bps)`;
+        feeEl.style.color = (d.feeRateBps || 0) > 0 ? '#c084fc' : '#a3e635';
       }
       if (beEl) {
-        beEl.textContent = `${(d.netVwapWithFee * 100).toFixed(1)}¢ (p=${d.breakEvenProb.toFixed(3)})`;
+        const netVwap = d.netVwapWithFee !== undefined ? d.netVwapWithFee : bestAsk;
+        const breakEven = d.breakEvenProb !== undefined ? d.breakEvenProb : bestAsk;
+        beEl.textContent = `${(netVwap * 100).toFixed(1)}¢ (p=${breakEven.toFixed(3)})`;
       }
 
       // Render 5-Level DOM Ladder
-      if (bidsCol && d.ladderBids) {
-        bidsCol.innerHTML = d.ladderBids.length > 0 ? d.ladderBids.map(b => 
-          `<div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
+      const bLadder = d.ladderBids || (d.depthLadder && d.depthLadder.bids) || [];
+      const aLadder = d.ladderAsks || (d.depthLadder && d.depthLadder.asks) || [];
+
+      if (bidsCol) {
+        bidsCol.innerHTML = bLadder.length > 0 ? bLadder.map(b => {
+          const depthVal = b.depthUsd !== undefined ? b.depthUsd : (b.price * b.size);
+          const safeDepth = (!isNaN(depthVal) && depthVal > 0) ? Math.round(depthVal) : 0;
+          return `<div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
             <span>${(b.price * 100).toFixed(0)}¢</span>
-            <span style="color:var(--muted);">$${Math.round(b.depthUsd)}</span>
-          </div>`
-        ).join('') : '<div style="color:var(--muted)">No bids</div>';
+            <span style="color:var(--muted);">$${safeDepth}</span>
+          </div>`;
+        }).join('') : '<div style="color:var(--muted)">No bids</div>';
       }
 
-      if (asksCol && d.ladderAsks) {
-        asksCol.innerHTML = d.ladderAsks.length > 0 ? d.ladderAsks.map(a => 
-          `<div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
-            <span style="color:var(--muted);">$${Math.round(a.depthUsd)}</span>
+      if (asksCol) {
+        asksCol.innerHTML = aLadder.length > 0 ? aLadder.map(a => {
+          const depthVal = a.depthUsd !== undefined ? a.depthUsd : (a.price * a.size);
+          const safeDepth = (!isNaN(depthVal) && depthVal > 0) ? Math.round(depthVal) : 0;
+          return `<div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
+            <span style="color:var(--muted);">$${safeDepth}</span>
             <span>${(a.price * 100).toFixed(0)}¢</span>
-          </div>`
-        ).join('') : '<div style="color:var(--muted)">No asks</div>';
+          </div>`;
+        }).join('') : '<div style="color:var(--muted)">No asks</div>';
       }
     } else {
       statusEl.textContent = 'Midpoint Model';
@@ -2311,16 +2344,8 @@ function simulateSnipe(q, outcome, price) {
     type: 'BUY',
     note: 'Quant Suite Snipe Trigger'
   });
-  alert(`⚡ สแกนสไนป์จำลองสำเร็จ!\n\nตลาด: ${q}\nผลลัพธ์: ${outcome}\nราคาเข้าซื้อ: $${price}\n\nระบบบันทึกลง Portfolio / Paper Trade เรียบร้อยแล้ว`);
+  showToast(`Logged $100 Sim Trade on ${outcome} (${Math.round(price * 100)}¢)!`, '⚡');
 }
-
-document.addEventListener('keydown', (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-    e.preventDefault();
-    const input = document.getElementById('search-input');
-    if (input) { input.focus(); input.select(); }
-  }
-});
 
 function toggleContext(btn) {
   const box = btn.parentElement.nextElementSibling;
@@ -3055,9 +3080,11 @@ async function pollAlerts() {
     const { alerts } = await (await fetch('/api/alerts')).json();
     const badge = document.getElementById('alert-count');
     if (alerts && alerts.length > 0) {
+      currentAlerts = alerts;
       badge.textContent = alerts.length; badge.style.display = 'inline';
       document.getElementById('alert-content').innerHTML = alerts.map((a, i) => createCardHTML(a, i, true)).join('');
     } else {
+      currentAlerts = [];
       badge.style.display = 'none';
       document.getElementById('alert-content').innerHTML = `<p style="color:var(--muted);text-align:center;padding:20px;">No high-conviction alerts right now.</p>`;
     }
@@ -3104,8 +3131,9 @@ function toggleCardDrawer(id) {
   }
 }
 
-async function quickWatchlistToggle(idx, btnEl) {
-  const opp = currentOpps[idx];
+async function quickWatchlistToggle(idx, btnEl, isAlert = false) {
+  const pool = isAlert ? currentAlerts : currentOpps;
+  const opp = pool[idx];
   if (!opp) return;
   const isSaved = btnEl.getAttribute('data-saved') === 'true';
   try {
@@ -3146,8 +3174,9 @@ async function quickWatchlistToggle(idx, btnEl) {
   }
 }
 
-async function quickPaperTrade(oppIdx, amount = 50) {
-  const opp = currentOpps[oppIdx];
+async function quickPaperTrade(oppIdx, amount = 50, isAlert = false) {
+  const pool = isAlert ? currentAlerts : currentOpps;
+  const opp = pool[oppIdx];
   if (!opp) return;
   try {
     const trade = {
@@ -3178,8 +3207,9 @@ async function quickPaperTrade(oppIdx, amount = 50) {
   }
 }
 
-function copySignal(oppIdx) {
-  const opp = currentOpps[oppIdx];
+function copySignal(oppIdx, isAlert = false) {
+  const pool = isAlert ? currentAlerts : currentOpps;
+  const opp = pool[oppIdx];
   if (!opp) return;
   const prob = (opp.price * 100).toFixed(1);
   const yieldPct = ((1 - opp.price) / opp.price * 100).toFixed(1);
@@ -3197,6 +3227,9 @@ function copySignal(oppIdx) {
     }).catch(() => {
       showToast('Signal generated (clipboard restricted)', '📋');
     });
+  }
+}
+
 // ══════════════════════════════════════════════════════════════════════
 //  INSTITUTIONAL AUTONOMOUS BOT & RISK CONTROL CLIENT CONTROLLER
 // ══════════════════════════════════════════════════════════════════════
@@ -3208,10 +3241,26 @@ let botState = {
 
 async function syncBotAndRiskStatus() {
   try {
-    const [botRes, riskRes] = await Promise.all([
+    const [botRes, riskRes, streamRes] = await Promise.all([
       fetch('/api/v1/bot/status').then(r => r.json()).catch(() => null),
-      fetch('/api/v1/risk/status').then(r => r.json()).catch(() => null)
+      fetch('/api/v1/risk/status').then(r => r.json()).catch(() => null),
+      fetch('/api/v1/clob/stream-status').then(r => r.json()).catch(() => null)
     ]);
+
+    // Live CLOB Streamer Badge Telemetry
+    const clobBadge = document.getElementById('stat-clob-ws');
+    if (clobBadge && streamRes) {
+      if (streamRes.isConnected) {
+        clobBadge.textContent = '🟢 Connected (WS)';
+        clobBadge.style.color = 'var(--accent)';
+      } else if (streamRes.isConnecting) {
+        clobBadge.textContent = '🟡 Polling (REST)';
+        clobBadge.style.color = '#facc15';
+      } else {
+        clobBadge.textContent = '⚪ Disconnected';
+        clobBadge.style.color = 'var(--muted)';
+      }
+    }
 
     if (botRes) {
       botState.enabled = botRes.enabled;

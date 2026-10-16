@@ -31,10 +31,10 @@
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
 | M0 | Survey & 4-Pillar Comprehensive Forensic Audit | Full forensic inspection across all 4 pillars, UI, streaming, and test suite. | None | DONE |
-| M1 | Core Execution & Risk Safety Remediation | Fix Weather NWP bracket schema, wire Paper Bot with Risk Manager, fix market concentration & drawdown chronology, harden ledger persistence. | M0 | IN_PROGRESS |
-| M2 | Quantitative & Mathematical Pricing Hardening | Harden NegRisk arbitrage, fix cross-market conditional probabilities, calibrate dust sweeper, stabilize de-vigging solvers, unify dynamic fees. | M1 | PLANNED |
-| M3 | High-Resilience Streaming & Terminal UI Polish | Fix CLOB sorting & REST fallback, autostart WebSocket streamer, align DOM depth schema, fix UI desyncs, optimize portfolio resolution. | M2 | PLANNED |
-| M4 | Regression Verification & Adversarial Stress Testing | Validate 100% test pass rate across existing 231 tests + new regression tests; stress test Kill-Switch <1,000ms latency. | M3 | PLANNED |
+| M1 | Core Execution & Risk Safety Remediation | Fix Weather NWP bracket schema, wire Paper Bot with Risk Manager, fix market concentration & drawdown chronology, harden ledger persistence. | M0 | DONE |
+| M2 | Quantitative & Mathematical Pricing Hardening | Harden NegRisk arbitrage, fix cross-market conditional probabilities, calibrate dust sweeper, stabilize de-vigging solvers, unify dynamic fees. | M1 | DONE |
+| M3 | High-Resilience Streaming & Terminal UI Polish | Fix CLOB sorting & REST fallback, autostart WebSocket streamer, align DOM depth schema, fix UI desyncs, optimize portfolio resolution. | M2 | DONE |
+| M4 | Regression Verification & Adversarial Stress Testing | Validate 100% test pass rate across existing 231 tests + new regression tests; stress test Kill-Switch <1,000ms latency. | M3 | DONE |
 
 ## Interface Contracts
 ### `engine/paper_bot.js` ↔ `engine/risk_manager.js`

@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "build": "npm --prefix frontend run build",
+    "build:frontend": "npm --prefix frontend run build",
+    "test": "for t in tests/test_*.js; do node \"$t\" || exit 1; done",
+    "test:frontend": "node --test frontend/tests/challenger_m1_fe_resilience.test.js",
+    "test:all": "npm test && npm run test:frontend && node tests/test_frontend_integration.js"
   },
   "license": "ISC",
   "dependencies": {

@@ -29,6 +29,7 @@ import { calculatePortfolioAnalytics } from "./engine/portfolio_analytics.js";
 import { paperBotInstance } from "./engine/paper_bot.js";
 import { riskManagerInstance } from "./engine/risk_manager.js";
 import { clobStreamerInstance } from "./engine/clob_streamer.js";
+import { resolveBacktestPortfolio } from "./engine/backtest_resolver.js";
 
 // ─── Load .env ──────────────────────────────────────────────────────────
 const require = createRequire(import.meta.url);
@@ -72,7 +73,21 @@ function readJSON(file, fallback = []) {
   }
 }
 function writeJSON(file, data) {
-  fs.writeFileSync(path.join(__dir, file), JSON.stringify(data, null, 2));
+  const targetPath = path.join(__dir, file);
+  const dir = path.dirname(targetPath);
+  const tempPath = path.join(
+    dir,
+    `.${file}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`
+  );
+  try {
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
+    fs.renameSync(tempPath, targetPath);
+  } catch (err) {
+    if (fs.existsSync(tempPath)) {
+      try { fs.unlinkSync(tempPath); } catch (_) {}
+    }
+    throw err;
+  }
 }
 
 // ─── CORS / response helpers ─────────────────────────────────────────────
@@ -117,19 +132,52 @@ async function backgroundScan() {
     });
     // Enrich opportunities with Quantitative Fair Value, Dynamic Fees & Net Edge
     if (result.opportunities) {
+      const marketLookup = new Map();
+      if (result.rawMarkets) {
+        for (const m of result.rawMarkets) {
+          if (m.question) marketLookup.set(m.question, m);
+        }
+      }
       result.opportunities = result.opportunities.map((opp) => {
         const price = parseFloat(opp.price || 0.50);
         const fairProb = opp.fairProb || (opp.score ? Math.min(0.95, Math.max(0.05, opp.score / 100)) : price);
         const fee = 0.02 * price * (1 - price);
         const netEdge = parseFloat(((fairProb - price - fee) * 100).toFixed(1));
+        const edgeLabel = netEdge > 3 ? "UNDERPRICED" : (netEdge < -3 ? "OVERPRICED" : "FAIR");
+
+        let yesTokenID = opp.yesTokenID || null;
+        let noTokenID = opp.noTokenID || null;
+        const rawM = marketLookup.get(opp.question);
+        if (rawM && rawM.clobTokenIds) {
+          try {
+            const tokenIds = typeof rawM.clobTokenIds === "string" ? JSON.parse(rawM.clobTokenIds) : rawM.clobTokenIds;
+            if (Array.isArray(tokenIds) && tokenIds.length >= 2) {
+              yesTokenID = tokenIds[0];
+              noTokenID = tokenIds[1];
+            }
+          } catch (_) {}
+        }
+        if (!yesTokenID && opp.outcomeIdx === 0) yesTokenID = opp.tokenID;
+        if (!noTokenID && opp.outcomeIdx === 1) noTokenID = opp.tokenID;
+
         return {
           ...opp,
           fairProb: parseFloat(fairProb.toFixed(3)),
           fairValue: `$${fairProb.toFixed(2)}`,
           netEdgePct: netEdge,
-          mispricing: netEdge > 3 ? "UNDERPRICED" : (netEdge < -3 ? "OVERPRICED" : "FAIR")
+          edgeLabel,
+          yesTokenID,
+          noTokenID,
+          mispricing: opp.mispricing || { detected: false }
         };
       });
+
+      // Auto-subscribe top scanner opportunities to live CLOB streamer
+      for (const opp of result.opportunities.slice(0, 30)) {
+        if (opp.tokenID) {
+          clobStreamerInstance.addTokenSubscription(opp.tokenID);
+        }
+      }
     }
 
     const highConv = (result.opportunities || []).filter((o) => o.score >= 85);
@@ -193,8 +241,8 @@ async function handler(req, res) {
     return;
   }
 
-  // ══ GET /api/scan ══════════════════════════════════════════════════════
-  if (url === "/api/scan") {
+  // ══ GET /api/scan & /api/opportunities ══════════════════════════════════
+  if (url === "/api/scan" || url === "/api/opportunities") {
     try {
       const force = req.url.includes("force=true");
       if (force) {
@@ -428,11 +476,12 @@ async function handler(req, res) {
     try {
       const q = new URLSearchParams(req.url.split("?")[1] || "");
       const tokenId = q.get("token_id");
+      const amount = parseFloat(q.get("amount") || "100");
       if (!tokenId) {
         err(res, "Missing token_id parameter", 400);
         return;
       }
-      const depth = await clobStreamerInstance.getLiveDepth(tokenId);
+      const depth = await clobStreamerInstance.getLiveDepth(tokenId, amount);
       ok(res, depth);
     } catch (e) {
       err(res, e.message, 500);
@@ -526,50 +575,7 @@ async function handler(req, res) {
   // ══ PAPER TRADE: Auto-resolve via Gamma API ════════════════════════════
   if (url === "/api/backtest/check") {
     try {
-      const db = readJSON("backtest.json", []);
-      let updated = false;
-      for (const trade of db) {
-        if (trade.status !== "Open") continue;
-        try {
-          const ctrl = new AbortController();
-          const tid = setTimeout(() => ctrl.abort(), 10000);
-          const r = await fetch(
-            `https://gamma-api.polymarket.com/events?slug=${trade.slug}`,
-            { signal: ctrl.signal }
-          );
-          clearTimeout(tid);
-          const data = await r.json();
-          const ev = data?.[0];
-          if (ev && ev.markets && ev.markets.length > 0) {
-            // Find the correct market in the event. Since we don't have conditionId stored, we'll try to match by question or fallback to first.
-            const m =
-              ev.markets.find((m) => m.question === trade.question) ||
-              ev.markets[0];
-            const p = m.outcomePrices;
-            if (p) {
-              const prices = JSON.parse(p);
-              const currentP = parseFloat(prices[trade.outcomeIdx] ?? 0);
-
-              if (ev.closed || m.closed) {
-                trade.status = "Closed";
-                trade.result = currentP >= 0.99 ? "Win" : "Loss";
-                trade.pnl =
-                  currentP >= 0.99
-                    ? ((1 - trade.price) / trade.price) * 100
-                    : -100;
-              } else {
-                // Calculate Unrealized PnL
-                trade.currentPrice = currentP;
-                trade.pnl = ((currentP - trade.price) / trade.price) * 100;
-              }
-              updated = true;
-            }
-          }
-        } catch (e) {
-          /* skip if Gamma fails for one trade */
-        }
-      }
-      if (updated) writeJSON("backtest.json", db);
+      const db = await resolveBacktestPortfolio();
       ok(res, db);
     } catch (e) {
       err(res, e.message, 500);
@@ -643,16 +649,77 @@ async function handler(req, res) {
     return;
   }
 
-  // ══ Static files ═══════════════════════════════════════════════════════
-  if (url === "/" || url === "/index.html") {
-    const fp = path.join(__dir, "public", "index.html");
-    try {
-      withHeaders(res, "text/html; charset=utf-8");
-      res.end(fs.readFileSync(fp, "utf-8"));
-    } catch {
-      err(res, "Not found", 404);
+  // ─── Production Static Asset Delivery & SPA Fallback (frontend/dist) ──
+  if (!url.startsWith("/api/")) {
+    // Directory traversal guard
+    if (url.includes("..")) {
+      err(res, "Forbidden", 403);
+      return;
     }
-    return;
+
+    const DIST_DIR = path.join(__dir, "frontend", "dist");
+    const PUBLIC_DIR = path.join(__dir, "public");
+
+    const MIME_TYPES = {
+      ".html": "text/html; charset=utf-8",
+      ".js": "application/javascript; charset=utf-8",
+      ".mjs": "application/javascript; charset=utf-8",
+      ".css": "text/css; charset=utf-8",
+      ".json": "application/json; charset=utf-8",
+      ".svg": "image/svg+xml",
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".gif": "image/gif",
+      ".ico": "image/x-icon",
+      ".woff": "font/woff",
+      ".woff2": "font/woff2",
+      ".ttf": "font/ttf",
+      ".map": "application/json; charset=utf-8",
+    };
+
+    // 1. Determine requested file path
+    let filePath;
+    if (url === "/" || url === "/index.html") {
+      filePath = fs.existsSync(path.join(DIST_DIR, "index.html"))
+        ? path.join(DIST_DIR, "index.html")
+        : path.join(PUBLIC_DIR, "index.html");
+    } else {
+      filePath = path.normalize(path.join(DIST_DIR, url));
+    }
+
+    const resolvedPath = path.resolve(filePath);
+    const inDist = resolvedPath.startsWith(path.resolve(DIST_DIR));
+    const inPublic = resolvedPath.startsWith(path.resolve(PUBLIC_DIR));
+
+    if (inDist || inPublic) {
+      if (fs.existsSync(resolvedPath) && fs.statSync(resolvedPath).isFile()) {
+        const ext = path.extname(resolvedPath).toLowerCase();
+        const contentType = MIME_TYPES[ext] || "application/octet-stream";
+        withHeaders(res, contentType);
+        const stream = fs.createReadStream(resolvedPath);
+        stream.on("error", () => {
+          if (!res.headersSent) err(res, "Internal server error", 500);
+        });
+        stream.pipe(res);
+        return;
+      }
+    }
+
+    // 2. SPA Fallback: serve index.html for non-asset client routes
+    const fallbackHtml = fs.existsSync(path.join(DIST_DIR, "index.html"))
+      ? path.join(DIST_DIR, "index.html")
+      : (fs.existsSync(path.join(PUBLIC_DIR, "index.html")) ? path.join(PUBLIC_DIR, "index.html") : null);
+
+    if (fallbackHtml) {
+      withHeaders(res, "text/html; charset=utf-8");
+      const stream = fs.createReadStream(fallbackHtml);
+      stream.on("error", () => {
+        if (!res.headersSent) err(res, "Internal server error", 500);
+      });
+      stream.pipe(res);
+      return;
+    }
   }
 
   err(res, "Not found", 404);
@@ -669,16 +736,21 @@ server.listen(PORT, "0.0.0.0", () => {
     `║   http://localhost:${PORT}                                   ║`,
   );
   console.log("║                                                            ║");
-  console.log("║   📡 Scanner  | 📝 Paper Trade  | 🔬 Backtest  | ⭐ Watch  ║");
   console.log(
     "╚════════════════════════════════════════════════════════════╝\n",
   );
+  console.log("[CLOB Streamer] Initializing persistent WebSocket singleton on boot...");
+  clobStreamerInstance.connect();
 });
 
 // ─── Graceful Shutdown ───────────────────────────────────────────────────
 process.on("SIGTERM", () => {
+  try { clobStreamerInstance.disconnect(); } catch (e) {}
   server.close(() => process.exit(0));
 });
 process.on("SIGINT", () => {
+  try { clobStreamerInstance.disconnect(); } catch (e) {}
   server.close(() => process.exit(0));
 });
+
+export { handler, server };

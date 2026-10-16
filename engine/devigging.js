@@ -4,15 +4,16 @@
  * Standard and Microstructural De-vigging Algorithms for Prediction Markets.
  * Removes bookmaker / automated market maker overround to extract true unbiased probabilities:
  * 1. Multiplicative (Proportional Normalization)
- * 2. Power Method (Logarithmic Overround / Newton-Raphson Solver)
- * 3. Shin (1993) Microstructure Model (Informed Trader / Bisection Solver)
+ * 2. Power Method (Logarithmic Overround / Safeguarded Newton-Raphson Solver)
+ * 3. Shin (1993) Microstructure Model (Informed Trader / Rationalized Bisection Solver)
  */
 
 /**
  * Validate probability array inputs.
  * @param {number[]} q - Quoted implied probabilities (asks or implied odds)
+ * @param {boolean} maxExclusive - Whether values must be strictly < 1.0 (true for Power solver)
  */
-function validateProbabilities(q) {
+function validateProbabilities(q, maxExclusive = false) {
   if (!Array.isArray(q) || q.length === 0) {
     throw new TypeError('Implied probabilities must be a non-empty array of numbers');
   }
@@ -20,6 +21,9 @@ function validateProbabilities(q) {
     const val = q[i];
     if (typeof val !== 'number' || isNaN(val) || val <= 0) {
       throw new RangeError(`Invalid probability at index ${i}: ${val}. Must be strictly positive.`);
+    }
+    if (maxExclusive && val >= 1.0) {
+      throw new RangeError(`Invalid probability at index ${i}: ${val}. Implied probability must be strictly less than 1.0.`);
     }
   }
 }
@@ -47,18 +51,19 @@ export function solveMultiplicativeDevig(impliedProbs) {
 
 /**
  * Power Method De-vigging (Margin-Weights / Logarithmic Solver).
- * Solves sum(q_i^r) = 1 for r > 1 using 1D Newton-Raphson root finding.
+ * Solves sum(q_i^r) = 1 for r using Safeguarded Newton-Raphson root finding with bisection fallback.
  * Then true probability p_i = q_i^r.
  * 
  * Decreases longshots more aggressively than favorites, partially adjusting for favorite-longshot bias.
  * 
- * @param {number[]} impliedProbs - Quoted probabilities
- * @param {number} maxIters - Maximum Newton-Raphson iterations (default 50)
+ * @param {number[]} impliedProbs - Quoted probabilities (strictly in (0, 1))
+ * @param {number} maxIters - Maximum iterations (default 60)
  * @param {number} tol - Convergence tolerance (default 1e-12)
  * @returns {{ trueProbs: number[], r: number, overround: number, iterations: number, method: 'power' }}
  */
-export function solvePowerDevig(impliedProbs, maxIters = 50, tol = 1e-12) {
-  validateProbabilities(impliedProbs);
+export function solvePowerDevig(impliedProbs, maxIters = 60, tol = 1e-12) {
+  // Validate that all q_i are strictly between 0 and 1.0 (q_i < 1.0 required for convergence)
+  validateProbabilities(impliedProbs, true);
   const n = impliedProbs.length;
   const s = impliedProbs.reduce((acc, v) => acc + v, 0);
 
@@ -72,43 +77,75 @@ export function solvePowerDevig(impliedProbs, maxIters = 50, tol = 1e-12) {
     };
   }
 
-  // Initial estimate for r
-  // sum(q_i^r) ~ 1. If q_i ~ s/n, (s/n)^r * n = 1 => r * ln(s/n) + ln(n) = 0
-  let r = Math.max(1.0001, Math.log(n) / (Math.log(n) - Math.log(s)));
-  if (isNaN(r) || !isFinite(r) || r <= 1.0) {
-    r = 1.0 + (s - 1.0) / n;
+  const qMax = Math.max(...impliedProbs);
+
+  // Analytical bracket:
+  // If s > 1.0, g(1) = s - 1 > 0. Since sum(q_i^r) <= n * qMax^r,
+  // n * qMax^r <= 1 => r >= ln(n) / (-ln(qMax)), guaranteeing g(rHigh) <= 0.
+  let rLow, rHigh;
+  if (s > 1.0) {
+    rLow = 1.0;
+    const theoreticalUpper = Math.log(n) / (-Math.log(qMax));
+    rHigh = Math.max(theoreticalUpper * 1.5, theoreticalUpper + 1.0);
+  } else {
+    // Underround: g(0) = n - 1 > 0 and g(1) = s - 1 < 0. Root in (0, 1).
+    rLow = 1e-6;
+    rHigh = 1.0;
   }
 
-  let iterations = 0;
-  for (let iter = 0; iter < maxIters; iter++) {
-    iterations++;
-    // g(r) = sum(q_i^r) - 1
-    // g'(r) = sum(q_i^r * ln(q_i))
+  function evalG(r) {
     let g = -1.0;
     let gPrime = 0.0;
-
     for (let i = 0; i < n; i++) {
       const qi = impliedProbs[i];
       const qiR = Math.pow(qi, r);
       g += qiR;
       gPrime += qiR * Math.log(qi);
     }
+    return { g, gPrime };
+  }
 
-    if (Math.abs(g) < tol) {
+  // Ensure rHigh brackets the root
+  let highEval = evalG(rHigh);
+  while (highEval.g > 0 && rHigh < 1e8) {
+    rHigh *= 2.0;
+    highEval = evalG(rHigh);
+  }
+
+  // Initial estimate
+  let r = Math.log(n) / (Math.log(n) - Math.log(s));
+  if (isNaN(r) || !isFinite(r) || r <= rLow || r >= rHigh) {
+    r = 0.5 * (rLow + rHigh);
+  }
+
+  let iterations = 0;
+  for (let iter = 0; iter < maxIters; iter++) {
+    iterations++;
+    const { g, gPrime } = evalG(r);
+
+    if (Math.abs(g) < tol || (rHigh - rLow) < tol) {
       break;
     }
 
-    if (Math.abs(gPrime) < 1e-15) {
-      break;
+    // Update active bracket
+    if (g > 0) {
+      rLow = r;
+    } else {
+      rHigh = r;
     }
 
-    const step = g / gPrime;
-    r = r - step;
-
-    // Guard against non-positive power
-    if (r <= 0.1) {
-      r = 0.1;
+    // Attempt Newton-Raphson step
+    let nextR = r;
+    if (Math.abs(gPrime) > 1e-15) {
+      nextR = r - g / gPrime;
     }
+
+    // Safeguard: if Newton step falls outside bracket or is non-finite, fall back to bisection
+    if (nextR <= rLow || nextR >= rHigh || isNaN(nextR) || !isFinite(nextR)) {
+      nextR = 0.5 * (rLow + rHigh);
+    }
+
+    r = nextR;
   }
 
   // Compute unnormalized true probabilities and re-normalize to ensure sum = 1.0 exactly
@@ -128,12 +165,15 @@ export function solvePowerDevig(impliedProbs, maxIters = 50, tol = 1e-12) {
 /**
  * Shin (1993) Microstructure De-vigging Model.
  * Models a dealer facing informed insider flow (proportion z) and noise traders (1 - z).
- * Solves for equilibrium insider parameter z in [0, 1) and true probabilities p_i:
+ * Solves for equilibrium insider parameter z in [0, 1) and true probabilities p_i.
  * 
- * p_i(z) = [ sqrt(z^2 + 4(1 - z) * (q_i^2 / s)) - z ] / [ 2(1 - z) ]
+ * Rationalized Shin Formulation:
+ * Eliminates catastrophic cancellation as z -> 1 by multiplying by the conjugate:
+ * p_i(z) = [ 2 * (q_i^2 / s) ] / [ sqrt(z^2 + 4(1 - z) * (q_i^2 / s)) + z ]
  * 
- * The root z* satisfies F(z) = sum(p_i(z)) - 1 = 0.
+ * Root z* satisfies F(z) = sum(p_i(z)) - 1 = 0.
  * Solved via high-precision 1D Bisection root-finding with tolerance 1e-10.
+ * For symmetric binary books, exact analytical theorem z* = s - 1 is utilized.
  * 
  * Interface Contract (PROJECT.md):
  * solveShinDevig(impliedProbs: number[]): { trueProbs: number[], z: number }
@@ -160,27 +200,43 @@ export function solveShinDevig(impliedProbs, maxIters = 80, tol = 1e-10) {
     };
   }
 
+  // Bracket for insider fraction z is rigorously [0.0, 1.0]
   let zLow = 0.0;
-  let zHigh = 1.0 - 1e-7;
+  let zHigh = 1.0;
   let zMid = 0.0;
   let iterations = 0;
 
-  // Function to evaluate sum(p_i(z))
+  // Precompute q_i^2 / s
+  const qiSqOverS = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const qi = impliedProbs[i];
+    qiSqOverS[i] = (qi * qi) / s;
+  }
+
+  // Check analytical theorem for symmetric binary books (z* = s - 1)
+  const isSymmetricBinary = n === 2 && Math.abs(impliedProbs[0] - impliedProbs[1]) < 1e-12;
+
+  // Function to evaluate sum(p_i(z)) using rationalized formulation
   function evalSumP(z) {
-    const twoOneMinusZ = 2.0 * (1.0 - z);
     const zSq = z * z;
+    const fourOneMinusZ = 4.0 * (1.0 - z);
     let sum = 0.0;
     for (let i = 0; i < n; i++) {
-      const qi = impliedProbs[i];
-      const term = Math.sqrt(zSq + 4.0 * (1.0 - z) * (qi * qi) / s);
-      sum += (term - z) / twoOneMinusZ;
+      const term = Math.sqrt(zSq + fourOneMinusZ * qiSqOverS[i]);
+      sum += (2.0 * qiSqOverS[i]) / (term + z);
     }
     return sum;
   }
 
   for (let iter = 0; iter < maxIters; iter++) {
     iterations++;
-    zMid = 0.5 * (zLow + zHigh);
+    if (isSymmetricBinary && iter === 0) {
+      // Analytical root theorem: z* = s - 1
+      zMid = Math.max(0.0, Math.min(1.0, s - 1.0));
+    } else {
+      zMid = 0.5 * (zLow + zHigh);
+    }
+
     const sumP = evalSumP(zMid);
     const diff = sumP - 1.0;
 
@@ -196,13 +252,14 @@ export function solveShinDevig(impliedProbs, maxIters = 80, tol = 1e-10) {
   }
 
   const z = zMid;
-  const twoOneMinusZ = 2.0 * (1.0 - z);
   const zSq = z * z;
+  const fourOneMinusZ = 4.0 * (1.0 - z);
 
-  const rawProbs = impliedProbs.map(qi => {
-    const term = Math.sqrt(zSq + 4.0 * (1.0 - z) * (qi * qi) / s);
-    return (term - z) / twoOneMinusZ;
-  });
+  const rawProbs = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const term = Math.sqrt(zSq + fourOneMinusZ * qiSqOverS[i]);
+    rawProbs[i] = (2.0 * qiSqOverS[i]) / (term + z);
+  }
 
   // Re-normalize to ensure sum is strictly 1.0000000000
   const sumFinal = rawProbs.reduce((acc, v) => acc + v, 0);
@@ -254,8 +311,11 @@ export function devigMarket(bidYes, askYes, method = 'shin') {
     return { trueProbYes: mid, trueProbNo: 1 - mid, overround: 1.0, z: 0 };
   }
 
-  const askNo = 1.0 - bidYes;
-  const implied = [askYes, askNo];
+  // Sanitize quotes to strictly stay within (0, 1) interval
+  const sanitizedBidYes = Math.max(1e-6, Math.min(1.0 - 1e-6, bidYes));
+  const sanitizedAskYes = Math.max(1e-6, Math.min(1.0 - 1e-6, askYes));
+  const askNo = Math.max(1e-6, Math.min(1.0 - 1e-6, 1.0 - sanitizedBidYes));
+  const implied = [sanitizedAskYes, askNo];
   const res = devig(implied, method);
   return {
     trueProbYes: res.trueProbs[0],

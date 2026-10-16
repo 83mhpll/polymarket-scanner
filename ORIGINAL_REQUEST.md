@@ -46,3 +46,49 @@
 ```text
 ดำเนินการต่อตามแผนงานใน ORIGINAL_REQUEST.md เริ่มต้นที่ Milestone M2 (Quantitative & Mathematical Pricing Hardening) และต่อด้วย Milestone M3 ได้เลยครับ
 ```
+
+
+## 2026-10-16T06:03:58Z
+
+An institutional prediction market trading terminal continuous enhancement, end-to-end integration verification, and production packaging system resuming directly from CHECKPOINT_2026_10_08.md and VICTORY_AUDIT.md.
+
+Working directory: /Users/mk83/.gemini/antigravity/scratch/polymarket-scanner
+Frontend directory: /Users/mk83/.gemini/antigravity/scratch/polymarket-scanner/frontend
+Integrity mode: development
+
+## Requirements
+
+### R1. Baseline Verification & Integrity Preservation
+- Verify that all existing 341 backend regression tests across all test suites (`tests/test_*.js`) continue to pass with a 100% pass rate when executed serially.
+- Verify that the React + Vite frontend in `frontend/` builds cleanly (`npm run build`) without compilation or fatal lint errors.
+
+### R2. Frontend E2E Integration & Live Wire Verification
+- Wire and verify full end-to-end integration between the React frontend and the Express/WebSocket backend (`server.js`, port 3001):
+  - Real-time 5-level L2 DOM Depth Ladder (`/api/v1/clob/live-depth`) rendering with proportional volume fill bars.
+  - Opportunity Cards rendering responsive 24h SVG Sparklines, current price anchor dots, and Fair Value / Net Edge gauges.
+  - Order Modal rendering dynamic VWAP slippage warning badges for varied trade sizes.
+  - Bot Control Bar and Emergency Hard Kill-Switch reflecting live backend status and dispatching controls with instant UI feedback.
+- Implement an automated headless integration / E2E verification test or script that exercises these UI components against mocked/live backend APIs to certify 0 runtime console errors.
+
+### R3. Production Packaging & Unified Server Delivery
+- Update `server.js` to serve compiled production static assets from `frontend/dist/` when accessed via HTTP, while maintaining API route integrity and fallback handling.
+- Ensure the system can be booted for production terminal usage via a single command (`npm start` / `node server.js`).
+
+### R4. Final Victory Certification & Clean Version Control Wrap-up
+- Generate a final audit report certifying end-to-end test completion across Backend M1–M4 and Frontend M1–M4.
+- Stage and commit all project changes, new test suites, documentation, and frontend assets with a clean, descriptive Git commit.
+
+## Acceptance Criteria
+
+### Baseline & Execution Safety
+- [ ] All 341 backend automated tests pass (100% pass rate, 0 failures) without breaking existing institutional risk or CLOB streaming contracts.
+- [ ] Frontend builds cleanly via `npm run build` with zero build errors.
+
+### Frontend Integration & Verification
+- [ ] Automated frontend verification script passes and certifies all key visual trading components render without runtime JavaScript exceptions.
+- [ ] Bot controls and emergency hard kill-switch communicate with backend endpoints and update state without UI lag.
+
+### Production Readiness & Git
+- [ ] Backend server successfully delivers production frontend assets from `frontend/dist`.
+- [ ] Working tree is staged and committed with clean Git history.
+- [ ] Final audit report is generated and archived in the workspace.
