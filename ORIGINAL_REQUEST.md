@@ -92,3 +92,43 @@ Integrity mode: development
 - [ ] Backend server successfully delivers production frontend assets from `frontend/dist`.
 - [ ] Working tree is staged and committed with clean Git history.
 - [ ] Final audit report is generated and archived in the workspace.
+
+
+## 2026-10-16T08:16:00Z
+
+An institutional prediction market trading terminal release audit and repository certification system performing monorepo verification, security checks, and automated GitHub publishing.
+
+Working directory: /Users/mk83/.gemini/antigravity/scratch/polymarket-scanner
+Integrity mode: development
+
+## Requirements
+
+### R1. Comprehensive Monorepo Verification & Invariants
+- Execute the full test runner suite (`npm run test:all`) covering all 410 unit, integration, and E2E tests, verifying a strict 100% pass rate (0 failures).
+- Verify that the production React + Vite application builds cleanly (`npm run build`) without fatal warnings, compile errors, or unhandled promise rejections.
+
+### R2. Git Working Tree & Security Hygiene Audit
+- Inspect the working tree and staging area to ensure no secrets, sensitive API tokens, private keys, or internal orchestration metadata (`.agents/`) are committed.
+- Verify that `.gitignore` properly isolates all build outputs, temporary scratch files, and dependencies.
+
+### R3. Version Control Packaging & Remote Synchronization
+- Ensure all recent architectural enhancements (zero-emoji institutional sidebar, config modal, alerts modal) are properly committed with descriptive conventional commit messages.
+- Verify that local `main` branch is pushed and synchronized with the remote upstream repository (`origin/main` at `https://github.com/83mhpll/polymarket-scanner.git`).
+
+### R4. Final Audit Certification & Release Report
+- Issue a release audit report certifying test suite results, security verification, and remote synchronization status.
+- Confirm that `git status` reports working tree completely clean with zero uncommitted changes.
+
+## Acceptance Criteria
+
+### Test Verification & Build
+- [ ] All 410 automated tests pass with 100% pass rate.
+- [ ] Production build succeeds via `npm run build` with compiled assets verified in `frontend/dist/`.
+
+### Security & Repository Cleanliness
+- [ ] Working tree contains zero untracked sensitive files or leak risks.
+- [ ] `.gitignore` is validated and active.
+
+### GitHub Synchronization
+- [ ] Local `main` branch matches `origin/main` with zero unpushed commits.
+- [ ] Remote repository reflects the certified release state.
