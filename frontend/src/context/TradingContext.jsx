@@ -10,6 +10,9 @@ import {
   resetKillSwitch as apiResetKillSwitch,
   fetchLiveDepth,
   fetchStreamStatus,
+  fetchConfig,
+  updateConfig,
+  fetchAlerts,
 } from '../services/api';
 
 const TradingContext = createContext(null);
@@ -80,6 +83,45 @@ export function TradingProvider({ children }) {
 
   const openPortfolioModal = useCallback(() => setPortfolioModalOpen(true), []);
   const closePortfolioModal = useCallback(() => setPortfolioModalOpen(false), []);
+
+  const [configModalOpen, setConfigModalOpen] = useState(false);
+  const openConfigModal = useCallback(() => setConfigModalOpen(true), []);
+  const closeConfigModal = useCallback(() => setConfigModalOpen(false), []);
+
+  const openAlertsModal = useCallback(() => setAlertsModalOpen(true), []);
+  const closeAlertsModal = useCallback(() => setAlertsModalOpen(false), []);
+
+  const [systemConfig, setSystemConfig] = useState(null);
+  const [alertsList, setAlertsList] = useState([]);
+
+  const refreshSystemConfig = useCallback(async () => {
+    try {
+      const cfg = await fetchConfig();
+      setSystemConfig(cfg);
+    } catch (err) {
+      console.warn('[TradingContext] Failed to fetch config:', err);
+    }
+  }, []);
+
+  const saveSystemConfig = useCallback(async (newCfg) => {
+    const updated = await updateConfig(newCfg);
+    setSystemConfig(updated);
+    return updated;
+  }, []);
+
+  const refreshAlerts = useCallback(async () => {
+    try {
+      const res = await fetchAlerts();
+      setAlertsList(res.alerts || []);
+    } catch (err) {
+      console.warn('[TradingContext] Failed to fetch alerts:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshSystemConfig();
+    refreshAlerts();
+  }, [refreshSystemConfig, refreshAlerts]);
 
   // Modal and Order State
   const [orderModalOpen, setOrderModalOpen] = useState(false);
@@ -283,12 +325,21 @@ export function TradingProvider({ children }) {
     sidebarOpen,
     setSidebarOpen,
 
-    // Portfolio & Alerts Modals
+    // Portfolio, Config & Alerts Modals
     portfolioModalOpen,
     openPortfolioModal,
     closePortfolioModal,
+    configModalOpen,
+    openConfigModal,
+    closeConfigModal,
     alertsModalOpen,
     setAlertsModalOpen,
+    openAlertsModal,
+    closeAlertsModal,
+    systemConfig,
+    saveSystemConfig,
+    alertsList,
+    refreshAlerts,
 
     // Watchlist
     watchlist,
@@ -326,7 +377,17 @@ export function TradingProvider({ children }) {
     portfolioModalOpen,
     openPortfolioModal,
     closePortfolioModal,
+    configModalOpen,
+    openConfigModal,
+    closeConfigModal,
     alertsModalOpen,
+    setAlertsModalOpen,
+    openAlertsModal,
+    closeAlertsModal,
+    systemConfig,
+    saveSystemConfig,
+    alertsList,
+    refreshAlerts,
     watchlist,
     toggleWatchlist,
     wallet,

@@ -7,6 +7,8 @@ import BotControlBar from './components/bot/BotControlBar';
 import OpportunityGrid from './components/opportunities/OpportunityGrid';
 import OrderModal from './components/order/OrderModal';
 import PortfolioModal from './components/portfolio/PortfolioModal';
+import ConfigModal from './components/config/ConfigModal';
+import AlertsModal from './components/alerts/AlertsModal';
 
 function MainTerminal() {
   return (
@@ -28,11 +30,11 @@ function MainTerminal() {
           {/* Opportunity Scanner Feed */}
           <OpportunityGrid />
 
-          {/* Order Execution Modal */}
+          {/* Modals */}
           <OrderModal />
-
-          {/* Portfolio & Orders Modal */}
           <PortfolioModal />
+          <ConfigModal />
+          <AlertsModal />
         </main>
       </div>
 

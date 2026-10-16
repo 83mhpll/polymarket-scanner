@@ -132,3 +132,40 @@ export async function fetchStreamStatus() {
   }
   return await res.json();
 }
+
+/**
+ * Fetch bot and scanner configuration
+ */
+export async function fetchConfig() {
+  const res = await fetch('/api/config');
+  if (!res.ok) {
+    throw new Error(`Failed to fetch config: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+/**
+ * Update bot and scanner configuration
+ */
+export async function updateConfig(newConfig) {
+  const res = await fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newConfig),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to update config: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+/**
+ * Fetch high conviction alerts
+ */
+export async function fetchAlerts() {
+  const res = await fetch('/api/alerts');
+  if (!res.ok) {
+    throw new Error(`Failed to fetch alerts: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
