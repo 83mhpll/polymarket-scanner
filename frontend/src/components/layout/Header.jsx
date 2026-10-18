@@ -14,6 +14,9 @@ export default function Header() {
     engineLatencyMs,
     sidebarOpen,
     setSidebarOpen,
+    executionMode,
+    setExecutionMode,
+    txflowStatus,
   } = useTrading();
 
   const handleKillSwitch = async () => {
@@ -78,13 +81,46 @@ export default function Header() {
           </a>
         </div>
 
-        {/* Center: Market Summary */}
-        <div className="hidden lg:flex items-center space-x-2 text-xs font-mono text-zinc-400">
-          <span className="text-zinc-200 font-semibold tabular-nums">{totalMarkets.toLocaleString()}</span>
-          <span>Markets Monitored</span>
-          <span className="text-zinc-600">•</span>
-          <span className="text-emerald-400 font-semibold tabular-nums">{opportunities.length}</span>
-          <span>Active Opportunities</span>
+        {/* Center: Execution Sandbox Mode Switcher & Market Summary */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Segmented Mode Switcher */}
+          <div className="flex items-center rounded-lg bg-zinc-950 p-0.5 border border-zinc-800 text-[11px] font-mono">
+            <button
+              type="button"
+              onClick={() => setExecutionMode('paper')}
+              className={`px-2.5 py-1 rounded-md font-semibold transition flex items-center space-x-1.5 ${
+                executionMode === 'paper'
+                  ? 'bg-zinc-800 text-emerald-400 border border-zinc-700/60 shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <span>📄</span>
+              <span className="hidden sm:inline">Local Paper Simulation</span>
+              <span className="sm:hidden">Paper</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setExecutionMode('txflow')}
+              className={`px-2.5 py-1 rounded-md font-semibold transition flex items-center space-x-1.5 ${
+                executionMode === 'txflow'
+                  ? 'bg-purple-950/80 text-purple-300 border border-purple-700/60 shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-purple-400 animate-pulse"></span>
+              <span className="hidden sm:inline">⚡ TxFlow Testnet Live CLOB</span>
+              <span className="sm:hidden">⚡ TxFlow CLOB</span>
+            </button>
+          </div>
+
+          {/* Market Summary */}
+          <div className="hidden xl:flex items-center space-x-2 text-xs font-mono text-zinc-400">
+            <span className="text-zinc-200 font-semibold tabular-nums">{totalMarkets.toLocaleString()}</span>
+            <span>Markets</span>
+            <span className="text-zinc-600">•</span>
+            <span className="text-emerald-400 font-semibold tabular-nums">{opportunities.length}</span>
+            <span>Opportunities</span>
+          </div>
         </div>
 
         {/* Right: Controls, Telemetry & Wallet */}
@@ -136,9 +172,14 @@ export default function Header() {
 
           {/* Wallet / Bankroll Pill */}
           <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-zinc-800/60 border border-zinc-700/60 text-zinc-300 text-[11px]">
-            <span className="text-zinc-500">USDC:</span>
-            <span className="font-semibold text-emerald-400 tabular-nums">
-              ${(wallet.balanceUsd || 10000).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            <span className="text-zinc-500">
+              {executionMode === 'txflow' ? 'TXFLOW USDC:' : 'USDC:'}
+            </span>
+            <span className={`font-semibold tabular-nums ${executionMode === 'txflow' ? 'text-purple-300' : 'text-emerald-400'}`}>
+              ${(executionMode === 'txflow'
+                ? (txflowStatus.outcomeBalanceUsd || 0)
+                : (wallet.balanceUsd || 10000)
+              ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
         </div>
@@ -146,3 +187,4 @@ export default function Header() {
     </header>
   );
 }
+

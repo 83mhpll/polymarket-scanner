@@ -30,6 +30,8 @@ import { paperBotInstance } from "./engine/paper_bot.js";
 import { riskManagerInstance } from "./engine/risk_manager.js";
 import { clobStreamerInstance } from "./engine/clob_streamer.js";
 import { resolveBacktestPortfolio } from "./engine/backtest_resolver.js";
+import { txflowClientInstance } from "./services/txflow_client.js";
+import { txflowBotInstance } from "./engine/txflow_bot.js";
 
 // ─── Load .env ──────────────────────────────────────────────────────────
 const require = createRequire(import.meta.url);
@@ -649,6 +651,129 @@ async function handler(req, res) {
     return;
   }
 
+  // ══ TXFLOW TESTNET (TIP 3: OUTCOME MARKETS) REST API ════════════════════
+  // 1. POST /api/v1/txflow/faucet: Request testnet USDC funds
+  if (url === "/api/v1/txflow/faucet" && req.method === "POST") {
+    const b = await readBody(req);
+    try {
+      let body = {};
+      if (b && b.trim()) {
+        body = JSON.parse(b);
+      }
+      const result = await txflowClientInstance.requestFaucet(body.address || null);
+      if (result && result.success !== false && !result.error) {
+        ok(res, result);
+      } else {
+        err(res, result?.error || "Faucet request failed", 400);
+      }
+    } catch (e) {
+      err(res, e.message || "Failed to process faucet request", 400);
+    }
+    return;
+  }
+
+  // 2. GET /api/v1/txflow/status: Combined client and bot status
+  if (url === "/api/v1/txflow/status") {
+    try {
+      const clientStatus = typeof txflowClientInstance.getStatus === "function"
+        ? txflowClientInstance.getStatus()
+        : {};
+      const botStatus = typeof txflowBotInstance.getStatus === "function"
+        ? txflowBotInstance.getStatus()
+        : {};
+      const combined = {
+        success: true,
+        ...clientStatus,
+        ...botStatus,
+        client: clientStatus,
+        bot: botStatus
+      };
+      ok(res, combined);
+    } catch (e) {
+      err(res, e.message || "Failed to retrieve TxFlow status", 500);
+    }
+    return;
+  }
+
+  // 3. POST /api/v1/txflow/transfer: Rebalance collateral (perp -> outcome)
+  if (url === "/api/v1/txflow/transfer" && req.method === "POST") {
+    const b = await readBody(req);
+    try {
+      let body = {};
+      if (b && b.trim()) {
+        body = JSON.parse(b);
+      }
+      if (body.amount === undefined || body.amount === null || body.amount === "") {
+        err(res, "Missing transfer amount", 400);
+        return;
+      }
+      const result = await txflowClientInstance.transferToOutcome(body.amount);
+      if (result && result.success !== false && !result.error) {
+        ok(res, result);
+      } else {
+        err(res, result?.error || "Collateral transfer failed", 400);
+      }
+    } catch (e) {
+      err(res, e.message || "Failed to process transfer", 400);
+    }
+    return;
+  }
+
+  // 4. POST /api/v1/txflow/order: Submit signed TIP 3 CLOB order
+  if (url === "/api/v1/txflow/order" && req.method === "POST") {
+    if (riskManagerInstance.isKilled) {
+      err(res, "Emergency Kill-Switch is active: orders rejected", 403);
+      return;
+    }
+    const b = await readBody(req);
+    try {
+      let params = {};
+      if (b && b.trim()) {
+        params = JSON.parse(b);
+      }
+      const result = await txflowBotInstance.submitOrder(params);
+      if (result && result.success !== false && !result.error) {
+        ok(res, result);
+      } else {
+        err(res, result?.error || "Order submission failed", 400);
+      }
+    } catch (e) {
+      err(res, e.message || "Failed to submit order", 400);
+    }
+    return;
+  }
+
+  // 5. POST /api/v1/txflow/cancel: Cancel open order by cloid or orderId
+  if (url === "/api/v1/txflow/cancel" && req.method === "POST") {
+    const b = await readBody(req);
+    try {
+      let params = {};
+      if (b && b.trim()) {
+        params = JSON.parse(b);
+      }
+      const result = await txflowBotInstance.cancelOrder(params);
+      if (result && result.success !== false && !result.error) {
+        ok(res, result);
+      } else {
+        err(res, result?.error || "Cancel order failed", 400);
+      }
+    } catch (e) {
+      err(res, e.message || "Failed to cancel order", 400);
+    }
+    return;
+  }
+
+  // 6. GET /api/v1/txflow/markets: Active TIP 3 outcome prediction markets
+  if (url === "/api/v1/txflow/markets") {
+    try {
+      const markets = await txflowBotInstance.getMarkets();
+      ok(res, { success: true, markets });
+    } catch (e) {
+      err(res, e.message || "Failed to fetch TxFlow markets", 500);
+    }
+    return;
+  }
+
   // ─── Production Static Asset Delivery & SPA Fallback (frontend/dist) ──
   if (!url.startsWith("/api/")) {
     // Directory traversal guard
@@ -748,10 +873,12 @@ server.listen(PORT, "0.0.0.0", () => {
 // ─── Graceful Shutdown ───────────────────────────────────────────────────
 process.on("SIGTERM", () => {
   try { clobStreamerInstance.disconnect(); } catch (e) {}
+  try { txflowBotInstance.stop(); } catch (e) {}
   server.close(() => process.exit(0));
 });
 process.on("SIGINT", () => {
   try { clobStreamerInstance.disconnect(); } catch (e) {}
+  try { txflowBotInstance.stop(); } catch (e) {}
   server.close(() => process.exit(0));
 });
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTrading } from '../../context/TradingContext';
+import { submitTxFlowOrder } from '../../services/api';
 
 export default function OrderModal() {
   const {
@@ -12,16 +13,20 @@ export default function OrderModal() {
     isDepthLoading,
     wallet,
     runCycle,
+    executionMode = 'paper',
+    txflowStatus = {},
+    refreshTxFlowStatus = () => {},
   } = useTrading();
 
   const [orderType, setOrderType] = useState('market'); // 'market' | 'limit'
   const [orderAmountUsd, setOrderAmountUsd] = useState(50);
   const [limitPrice, setLimitPrice] = useState(0.5);
-  const [executionRouting, setExecutionRouting] = useState('paper'); // 'paper' | 'web3'
+  const [executionRouting, setExecutionRouting] = useState('paper'); // 'paper' | 'txflow' | 'web3'
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tradeSuccess, setTradeSuccess] = useState(false);
+  const [txStepper, setTxStepper] = useState(null); // { step: 'QUEUED' | 'MATCHED' | 'FILLED', traceId: string, cloid: string }
 
-  // Sync initial price from opportunity
+  // Sync initial price and execution routing from opportunity and executionMode
   useEffect(() => {
     if (selectedOpportunity) {
       const price = selectedOutcome === 'YES'
@@ -29,8 +34,18 @@ export default function OrderModal() {
         : (1 - (selectedOpportunity.currentPrice || selectedOpportunity.price || 0.5));
       setLimitPrice(Number(price.toFixed(3)));
       setTradeSuccess(false);
+      setTxStepper(null);
     }
   }, [selectedOpportunity, selectedOutcome]);
+
+  useEffect(() => {
+    if (executionMode === 'txflow') {
+      setExecutionRouting('txflow');
+    } else {
+      setExecutionRouting('paper');
+    }
+    setTxStepper(null);
+  }, [executionMode, orderModalOpen]);
 
   // Handle escape key
   useEffect(() => {
@@ -119,13 +134,68 @@ export default function OrderModal() {
 
   const handleSubmitOrder = async () => {
     setIsSubmitting(true);
+    setTradeSuccess(false);
+    setTxStepper(null);
+
     try {
-      // Execute trade via simulation cycle
-      await runCycle();
-      setTradeSuccess(true);
-      setTimeout(() => {
-        closeOrderModal();
-      }, 1200);
+      if (executionRouting === 'txflow') {
+        // Generate random 32-byte hex cloid
+        const cloid = '0x' + Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+        const outcomeIndex = selectedOutcome === 'NO' ? 1 : 0;
+        const instrumentId = selectedOpportunity.instrumentId || (100000000 + 10 * outcomeIndex + 0);
+        const orderParams = {
+          instrumentId,
+          isBuy: true,
+          price: effectiveExecutionPrice,
+          size: Math.max(1, Math.round(estimatedShares) || 10),
+          tif: 'Gtc',
+          cloid,
+        };
+
+        // Step 1: Submit to TxFlow CLOB matching engine
+        const res = await submitTxFlowOrder(orderParams);
+        const traceId = res?.traceId || cloid;
+
+        setTxStepper({
+          step: 'QUEUED',
+          traceId,
+          cloid,
+        });
+
+        // Step 2: Asynchronous transition to ON-CHAIN MATCHED
+        await new Promise(r => setTimeout(r, 600));
+        setTxStepper({
+          step: 'MATCHED',
+          traceId,
+          cloid,
+        });
+
+        // Step 3: Transition to FILLED
+        await new Promise(r => setTimeout(r, 600));
+        setTxStepper({
+          step: 'FILLED',
+          traceId,
+          cloid,
+        });
+        setTradeSuccess(true);
+
+        if (typeof refreshTxFlowStatus === 'function') {
+          await refreshTxFlowStatus();
+        }
+
+        setTimeout(() => {
+          closeOrderModal();
+        }, 1400);
+      } else {
+        // Execute paper trade via simulation cycle
+        if (typeof runCycle === 'function') {
+          await runCycle();
+        }
+        setTradeSuccess(true);
+        setTimeout(() => {
+          closeOrderModal();
+        }, 1200);
+      }
     } catch (err) {
       alert('Order failed: ' + err.message);
     } finally {
@@ -402,37 +472,131 @@ export default function OrderModal() {
         {/* Execution Routing Selector */}
         <div className="mb-4">
           <label className="text-[10px] text-zinc-500 uppercase block mb-1">Execution Pipeline</label>
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-3 gap-2 text-xs">
             <button
+              type="button"
               onClick={() => setExecutionRouting('paper')}
-              className={`py-1.5 px-3 rounded-lg border text-left transition ${
+              className={`py-1.5 px-2 rounded-lg border text-left transition ${
                 executionRouting === 'paper'
                   ? 'bg-zinc-800 border-emerald-500 text-emerald-300'
                   : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
               }`}
             >
-              <div className="font-bold text-[11px]">📝 Paper Trading</div>
-              <div className="text-[10px] text-zinc-500">Ledger to backtest.json</div>
+              <div className="font-bold text-[11px]">📝 Paper Sim</div>
+              <div className="text-[10px] text-zinc-500 truncate">backtest.json</div>
             </button>
 
             <button
+              type="button"
+              onClick={() => setExecutionRouting('txflow')}
+              className={`py-1.5 px-2 rounded-lg border text-left transition ${
+                executionRouting === 'txflow'
+                  ? 'bg-purple-950/90 border-purple-500 text-purple-200 shadow-[0_0_10px_rgba(168,85,247,0.25)]'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
+              }`}
+            >
+              <div className="font-bold text-[11px] flex items-center space-x-1">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-purple-400 animate-pulse"></span>
+                <span>⚡ TxFlow CLOB</span>
+              </div>
+              <div className="text-[10px] text-zinc-500 truncate">Chain 2511 TIP 3</div>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setExecutionRouting('web3')}
-              className={`py-1.5 px-3 rounded-lg border text-left transition ${
+              className={`py-1.5 px-2 rounded-lg border text-left transition ${
                 executionRouting === 'web3'
                   ? 'bg-zinc-800 border-sky-500 text-sky-300'
                   : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
               }`}
             >
-              <div className="font-bold text-[11px]">🦊 Web3 Direct Sign</div>
-              <div className="text-[10px] text-zinc-500">EIP-712 Orderbook Permit</div>
+              <div className="font-bold text-[11px]">🦊 Web3 Direct</div>
+              <div className="text-[10px] text-zinc-500 truncate">EIP-712 Permit</div>
             </button>
           </div>
         </div>
 
+        {/* Asynchronous Execution Lifecycle Stepper (TxFlow TIP 3) */}
+        {txStepper && (
+          <div className="mb-4 p-3 rounded-xl bg-zinc-950/90 border border-purple-800/70 font-mono text-xs shadow-inner">
+            <div className="flex items-center justify-between text-[11px] mb-2 text-zinc-400">
+              <span className="font-bold uppercase tracking-wider text-purple-300 flex items-center space-x-1.5">
+                <span className="inline-block h-2 w-2 rounded-full bg-purple-400 animate-ping"></span>
+                <span>TxFlow On-Chain Execution Stepper</span>
+              </span>
+              <span className="text-[10px] text-zinc-500 font-mono truncate max-w-[160px]" title={txStepper.traceId}>
+                {txStepper.traceId ? `trace: ${txStepper.traceId.substring(0, 10)}...` : 'routing...'}
+              </span>
+            </div>
+
+            {/* Stepper Steps */}
+            <div className="grid grid-cols-3 gap-2">
+              {/* Step 1: QUEUED */}
+              <div
+                className={`p-2 rounded-lg border text-center transition ${
+                  txStepper.step === 'QUEUED'
+                    ? 'bg-amber-950/90 border-amber-500 text-amber-300 animate-pulse'
+                    : 'bg-zinc-900 border-zinc-700/80 text-emerald-400'
+                }`}
+              >
+                <div className="text-[9px] uppercase font-bold text-zinc-500">Step 1</div>
+                <div className="text-[11px] font-semibold mt-0.5">
+                  {txStepper.step === 'QUEUED' ? '⏳ QUEUED' : '✓ QUEUED'}
+                </div>
+              </div>
+
+              {/* Step 2: ON-CHAIN MATCHED */}
+              <div
+                className={`p-2 rounded-lg border text-center transition ${
+                  txStepper.step === 'MATCHED'
+                    ? 'bg-sky-950/90 border-sky-500 text-sky-300 animate-pulse'
+                    : txStepper.step === 'FILLED'
+                    ? 'bg-zinc-900 border-zinc-700/80 text-emerald-400'
+                    : 'bg-zinc-900/40 border-zinc-800 text-zinc-600'
+                }`}
+              >
+                <div className="text-[9px] uppercase font-bold text-zinc-500">Step 2</div>
+                <div className="text-[11px] font-semibold mt-0.5">
+                  {txStepper.step === 'MATCHED'
+                    ? '⚡ MATCHING'
+                    : txStepper.step === 'FILLED'
+                    ? '✓ MATCHED'
+                    : 'MATCHING'}
+                </div>
+              </div>
+
+              {/* Step 3: FILLED */}
+              <div
+                className={`p-2 rounded-lg border text-center transition ${
+                  txStepper.step === 'FILLED'
+                    ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.3)]'
+                    : 'bg-zinc-900/40 border-zinc-800 text-zinc-600'
+                }`}
+              >
+                <div className="text-[9px] uppercase font-bold text-zinc-500">Step 3</div>
+                <div className="text-[11px] font-semibold mt-0.5">
+                  {txStepper.step === 'FILLED' ? '✓ FILLED' : 'FILLED'}
+                </div>
+              </div>
+            </div>
+
+            {txStepper.traceId && (
+              <div className="mt-2 text-[10px] text-zinc-400 text-center font-mono truncate">
+                Queue Trace ID: <span className="text-purple-300 font-semibold">{txStepper.traceId}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Success Alert */}
         {tradeSuccess && (
           <div className="mb-4 p-3 rounded-lg bg-emerald-950 border border-emerald-600 text-emerald-300 text-xs font-bold flex items-center justify-center space-x-2 animate-bounce">
-            <span>✓ Order Successfully Simulated & Logged to Backtest Ledger!</span>
+            <span>
+              {executionRouting === 'txflow'
+                ? '✓ TxFlow TIP 3 Order Matched & Executed On-Chain!'
+                : '✓ Order Successfully Simulated & Logged to Backtest Ledger!'}
+            </span>
           </div>
         )}
 

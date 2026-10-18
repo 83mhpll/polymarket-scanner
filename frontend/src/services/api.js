@@ -169,3 +169,102 @@ export async function fetchAlerts() {
   }
   return await res.json();
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * TxFlow Testnet (TIP 3: Outcome Markets) REST API Client
+ * ═══════════════════════════════════════════════════════════════
+ */
+
+/**
+ * Fetch combined TxFlow testnet status: balances, agent approval, and order telemetry
+ */
+export async function fetchTxFlowStatus() {
+  const res = await fetch('/api/v1/txflow/status');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch TxFlow status: HTTP ${res.status} ${res.statusText}`);
+  }
+  return await res.json();
+}
+
+/**
+ * Request testnet USDC funds from TxFlow faucet into perp sub-account
+ * @param {string|null} address - Optional target wallet address
+ */
+export async function claimTxFlowFaucet(address = null) {
+  const res = await fetch('/api/v1/txflow/faucet', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(address ? { address } : {}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to claim TxFlow faucet: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+/**
+ * Rebalance collateral from perp sub-account to outcome sub-account
+ * @param {number|string} amount - USDC amount to transfer
+ */
+export async function transferTxFlowCollateral(amount = 1000) {
+  const res = await fetch('/api/v1/txflow/transfer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to transfer collateral: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+/**
+ * Submit signed TIP 3 CLOB order to TxFlow matching engine
+ * @param {Object} params - Order parameters { instrumentId, isBuy, price, size, tif, cloid }
+ */
+export async function submitTxFlowOrder(params) {
+  const res = await fetch('/api/v1/txflow/order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to submit TxFlow order: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+/**
+ * Cancel open TxFlow order by cloid or orderId
+ * @param {Object} params - Cancel parameters { orderId, cloid, instrumentId }
+ */
+export async function cancelTxFlowOrder(params) {
+  const res = await fetch('/api/v1/txflow/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to cancel TxFlow order: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+/**
+ * Fetch active TxFlow TIP 3 outcome prediction markets
+ */
+export async function fetchTxFlowMarkets() {
+  const res = await fetch('/api/v1/txflow/markets');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch TxFlow markets: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+

@@ -4,6 +4,7 @@ import Header from './components/layout/Header';
 import Sidebar from './components/layout/Sidebar';
 import StatsBar from './components/layout/StatsBar';
 import BotControlBar from './components/bot/BotControlBar';
+import TxFlowTelemetryWidget from './components/txflow/TxFlowTelemetryWidget';
 import OpportunityGrid from './components/opportunities/OpportunityGrid';
 import OrderModal from './components/order/OrderModal';
 import PortfolioModal from './components/portfolio/PortfolioModal';
@@ -26,6 +27,9 @@ function MainTerminal() {
 
           {/* 24/7 Autonomous Bot Control Panel */}
           <BotControlBar />
+
+          {/* TxFlow Testnet Telemetry & Faucet Widget (Active in TxFlow Mode) */}
+          <TxFlowTelemetryWidget />
 
           {/* Opportunity Scanner Feed */}
           <OpportunityGrid />

@@ -13,11 +13,52 @@ import {
   fetchConfig,
   updateConfig,
   fetchAlerts,
+  fetchTxFlowStatus,
+  claimTxFlowFaucet,
+  transferTxFlowCollateral,
+  submitTxFlowOrder,
+  cancelTxFlowOrder,
+  fetchTxFlowMarkets,
 } from '../services/api';
 
 const TradingContext = createContext(null);
 
 export function TradingProvider({ children }) {
+  // Execution Mode State: 'paper' | 'txflow' (persisted in localStorage)
+  const [executionMode, setExecutionModeState] = useState(() => {
+    try {
+      return localStorage.getItem('pm_execution_mode') || 'paper';
+    } catch (_) {
+      return 'paper';
+    }
+  });
+
+  const setExecutionMode = useCallback((mode) => {
+    setExecutionModeState(mode);
+    try {
+      localStorage.setItem('pm_execution_mode', mode);
+    } catch (_) {}
+  }, []);
+
+  // TxFlow Testnet (TIP 3: Outcome Markets) State
+  const [txflowStatus, setTxflowStatus] = useState({
+    connected: false,
+    chainId: 2511,
+    masterAddress: null,
+    agentAddress: null,
+    isAgentApproved: false,
+    perpBalanceUsd: 0,
+    outcomeBalanceUsd: 0,
+    openOrdersCount: 0,
+    recentOrders: [],
+    recentTraces: [],
+    stats: {},
+    loading: false,
+    faucetLoading: false,
+    transferLoading: false,
+    error: null,
+  });
+
   // Market opportunities state
   const [opportunities, setOpportunities] = useState([]);
   const [totalMarkets, setTotalMarkets] = useState(0);
@@ -204,6 +245,67 @@ export function TradingProvider({ children }) {
     }
   }, []);
 
+  // Refresh TxFlow testnet telemetry
+  const refreshTxFlowStatus = useCallback(async () => {
+    try {
+      const res = await fetchTxFlowStatus();
+      setTxflowStatus(prev => {
+        const orders = res.recentOrders || (res.bot && res.bot.recentOrders) || [];
+        const traces = orders.map(o => ({
+          traceId: o.traceId || o.cloid || `trace_${o.id || Math.random().toString(36).substring(2, 9)}`,
+          cloid: o.cloid,
+          status: o.status,
+          price: o.price,
+          size: o.size,
+          side: o.side || (o.isBuy ? 'BUY' : 'SELL'),
+          timestamp: o.timestamp || Date.now(),
+        }));
+        return {
+          ...prev,
+          connected: res.connected !== undefined ? res.connected : (res.client?.connected ?? true),
+          chainId: res.chainId || 2511,
+          masterAddress: res.masterAddress || (res.client && res.client.masterAddress) || null,
+          agentAddress: res.agentAddress || (res.client && res.client.agentAddress) || null,
+          isAgentApproved: res.isAgentApproved !== undefined ? res.isAgentApproved : (res.client?.isAgentApproved ?? false),
+          perpBalanceUsd: res.perpBalanceUsd ?? (res.client?.perpBalanceUsd ?? 0),
+          outcomeBalanceUsd: res.outcomeBalanceUsd ?? (res.client?.outcomeBalanceUsd ?? 0),
+          openOrdersCount: res.openOrdersCount ?? (res.bot?.openOrdersCount ?? 0),
+          recentOrders: orders,
+          recentTraces: traces.length > 0 ? traces : prev.recentTraces,
+          stats: res.stats || (res.bot && res.bot.stats) || {},
+          error: null,
+        };
+      });
+    } catch (err) {
+      console.warn('[TradingContext] Error fetching TxFlow status:', err);
+      setTxflowStatus(prev => ({ ...prev, error: err.message }));
+    }
+  }, []);
+
+  // Claim testnet USDC faucet
+  const claimFaucet = useCallback(async (address = null) => {
+    setTxflowStatus(prev => ({ ...prev, faucetLoading: true }));
+    try {
+      const res = await claimTxFlowFaucet(address);
+      await refreshTxFlowStatus();
+      return res;
+    } finally {
+      setTxflowStatus(prev => ({ ...prev, faucetLoading: false }));
+    }
+  }, [refreshTxFlowStatus]);
+
+  // Transfer collateral perp -> outcome
+  const transferCollateral = useCallback(async (amount = 1000) => {
+    setTxflowStatus(prev => ({ ...prev, transferLoading: true }));
+    try {
+      const res = await transferTxFlowCollateral(amount);
+      await refreshTxFlowStatus();
+      return res;
+    } finally {
+      setTxflowStatus(prev => ({ ...prev, transferLoading: false }));
+    }
+  }, [refreshTxFlowStatus]);
+
   // Bot actions
   const toggleBot = useCallback(async () => {
     if (riskStatus.isKilled) {
@@ -271,18 +373,30 @@ export function TradingProvider({ children }) {
     refreshBotStatus();
     refreshRiskStatus();
     refreshStreamStatus();
+    refreshTxFlowStatus();
 
     const pollInterval = setInterval(() => {
       refreshOpportunities(false);
       refreshBotStatus();
       refreshRiskStatus();
       refreshStreamStatus();
+      refreshTxFlowStatus();
     }, 15000);
 
     return () => clearInterval(pollInterval);
-  }, [refreshOpportunities, refreshBotStatus, refreshRiskStatus, refreshStreamStatus]);
+  }, [refreshOpportunities, refreshBotStatus, refreshRiskStatus, refreshStreamStatus, refreshTxFlowStatus]);
 
   const value = useMemo(() => ({
+    // Execution Mode Sandbox Switcher
+    executionMode,
+    setExecutionMode,
+
+    // TxFlow Testnet (TIP 3) Telemetry & Actions
+    txflowStatus,
+    refreshTxFlowStatus,
+    claimFaucet,
+    transferCollateral,
+
     // Opportunities
     opportunities,
     totalMarkets,
@@ -348,6 +462,12 @@ export function TradingProvider({ children }) {
     // Wallet
     wallet,
   }), [
+    executionMode,
+    setExecutionMode,
+    txflowStatus,
+    refreshTxFlowStatus,
+    claimFaucet,
+    transferCollateral,
     opportunities,
     totalMarkets,
     scannerStats,

@@ -11,6 +11,9 @@ export default function BotControlBar() {
     triggerKillSwitch,
     resetKillSwitch,
     wsStatus,
+    executionMode,
+    setExecutionMode,
+    txflowStatus,
   } = useTrading();
 
   const handleToggle = async () => {
@@ -32,7 +35,12 @@ export default function BotControlBar() {
   const grossExposureUsd = riskStatus.metrics?.grossExposureUsd || 0;
   const grossExposurePct = riskStatus.metrics?.grossExposurePct || 0;
   const drawdownPct = riskStatus.metrics?.currentDrawdownPct || 0;
-  const tradesExecuted = botStatus.stats?.tradesExecuted || botStatus.closedPositionsCount || 0;
+  const tradesExecuted = executionMode === 'txflow'
+    ? (txflowStatus.stats?.totalFilled || 0)
+    : (botStatus.stats?.tradesExecuted || botStatus.closedPositionsCount || 0);
+  const activeOrdersCount = executionMode === 'txflow'
+    ? (txflowStatus.openOrdersCount || 0)
+    : (botStatus.openPositionsCount || 0);
 
   return (
     <div className="bg-gradient-to-r from-zinc-900/95 via-zinc-900/90 to-zinc-800/90 border border-zinc-800 hover:border-zinc-700/80 rounded-xl p-4 mb-5 shadow-lg transition">
@@ -40,12 +48,14 @@ export default function BotControlBar() {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-zinc-800/80">
         <div className="flex items-start sm:items-center space-x-3">
           <div className="h-10 w-10 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center text-xl shrink-0 shadow-inner">
-            🤖
+            {executionMode === 'txflow' ? '⚡' : '🤖'}
           </div>
           <div>
             <div className="flex items-center space-x-2.5">
               <h2 className="text-sm sm:text-base font-bold font-mono text-zinc-100">
-                24/7 Autonomous Paper-Trading Bot
+                {executionMode === 'txflow'
+                  ? 'TxFlow Testnet Autonomous CLOB Bot (TIP 3)'
+                  : '24/7 Autonomous Paper-Trading Bot'}
               </h2>
               <span
                 className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border ${
@@ -60,7 +70,9 @@ export default function BotControlBar() {
               </span>
             </div>
             <p className="text-[11px] text-zinc-400 font-mono mt-0.5 hidden sm:block">
-              Ensemble Fair Value (M1) • Shin De-vigging • Dynamic Fee Net Edge • Quarter Kelly Sizing • Passive Queue Fill Simulator
+              {executionMode === 'txflow'
+                ? 'TxFlow Testnet (Chain ID 2511) • EIP-712 Dual-Tier Signer • Integer Asset ID • Asynchronous Queue Tracking'
+                : 'Ensemble Fair Value (M1) • Shin De-vigging • Dynamic Fee Net Edge • Quarter Kelly Sizing • Passive Queue Fill Simulator'}
             </p>
           </div>
         </div>
@@ -119,13 +131,25 @@ export default function BotControlBar() {
       {/* Bottom Row: Micro Telemetry Badges */}
       <div className="pt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs font-mono">
         <div className="flex flex-col">
-          <span className="text-[10px] text-zinc-500 uppercase">BOT MODE</span>
-          <span className="font-semibold text-zinc-300">Paper / Simulation</span>
+          <span className="text-[10px] text-zinc-500 uppercase">EXECUTION PIPELINE</span>
+          <button
+            type="button"
+            onClick={() => setExecutionMode(executionMode === 'paper' ? 'txflow' : 'paper')}
+            className={`mt-0.5 px-2 py-0.5 rounded text-[10px] font-semibold transition border flex items-center space-x-1.5 w-fit ${
+              executionMode === 'txflow'
+                ? 'bg-purple-950/80 text-purple-300 border-purple-700 hover:bg-purple-900/80'
+                : 'bg-zinc-800/80 text-emerald-400 border-zinc-700 hover:bg-zinc-700/80'
+            }`}
+            title="Toggle between Local Paper Simulation and TxFlow Testnet CLOB"
+          >
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${executionMode === 'txflow' ? 'bg-purple-400 animate-pulse' : 'bg-emerald-400'}`}></span>
+            <span>{executionMode === 'txflow' ? 'TxFlow Testnet CLOB' : 'Local Paper Sim'}</span>
+          </button>
         </div>
         <div className="flex flex-col">
           <span className="text-[10px] text-zinc-500 uppercase">ACTIVE ORDERS</span>
           <span className="font-semibold text-emerald-400 tabular-nums">
-            {botStatus.openPositionsCount || 0} Open
+            {activeOrdersCount} Open
           </span>
         </div>
         <div className="flex flex-col">
