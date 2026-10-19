@@ -132,3 +132,75 @@ Integrity mode: development
 ### GitHub Synchronization
 - [ ] Local `main` branch matches `origin/main` with zero unpushed commits.
 - [ ] Remote repository reflects the certified release state.
+
+
+## 2026-10-18T18:41:37Z
+
+An institutional prediction market trading terminal and decentralized exchange execution system integrating TxFlow Testnet (TIP 3: Outcome Markets) to elevate sandbox paper trading into a realistic, on-chain CLOB execution environment.
+
+Working directory: /Users/mk83/.gemini/antigravity/scratch/polymarket-scanner
+Frontend directory: /Users/mk83/.gemini/antigravity/scratch/polymarket-scanner/frontend
+Integrity mode: development
+
+## Requirements
+
+### R1. Base Invariant Preservation & Test Integrity
+- Preserve the integrity of all existing 410 automated tests (Backend 341 + Resilience 42 + Frontend Integration 27). All test suites must continue to pass with a strict 100% pass rate (0 failures) when run via `npm run test:all`.
+- The production React + Vite application in `frontend/` must compile cleanly without fatal warnings or build errors via `npm run build`.
+
+### R2. TxFlow Testnet Service & Faucet Provider (`services/txflow_client.js`)
+- Connect to TxFlow Testnet RPC endpoint: `https://rpc.txflow-testnet.xyz` (Chain ID: 2511).
+- Implement an automated testnet faucet client executing `POST /request-fund` with `{ "address": "0x..." }` to deposit initial test USDC collateral into the user's `perp` sub-account.
+- Implement dual-tier institutional key management (Master Account Key & Agent Key):
+  * Generate and manage dedicated agent keys for automated bot execution.
+  * Construct and sign EIP-712 `approveAgent` transactions allowing the agent key to submit orders without withdrawal or fund-transfer authority.
+- Implement internal collateral rebalancing:
+  * Construct and sign EIP-712 `tokenSend` (`TransferToken`) actions transferring test USDC from the `perp` sub-account to the `outcome` sub-account to fund prediction market trading.
+
+### R3. Outcome Markets Order Signer & Execution Engine (`engine/txflow_bot.js`)
+- Implement EIP-712 Typed Data signing + MessagePack encoding conforming strictly to the TxFlow TIP 3 specification:
+  * EIP-712 Domain: `name`: 'TxFlow-Testnet', `version`: '1', `chainId`: 2511, `verifyingContract`: `0x0000000000000000000000000000000000000000`.
+  * Deterministic MessagePack map serialization preserving TxFlow's required key ordering (never sort keys) with low-S ECDSA signatures (`v` = 27/28).
+  * Dispatch limit and market orders to `POST /exchange` with action `order`, encoding `asset` (instrument_id) as an Integer, supporting Time-In-Force (TIF) options `Gtc`, `Gtd`, and `Alo`.
+- Implement asynchronous queue handling & dual WebSocket tracking:
+  * Capture and track asynchronous queue `traceId` returned by the HTTP gateway.
+  * Listen to `/api-ws` (`outcomeOrderUpdate`) to catch delay-queue errors or dropouts.
+  * Listen to `/ws` (`outcomeOrderUpdates`) to monitor real-time order lifecycle states (queued, resting on book, filled, cancelled).
+
+### R4. Express Backend API Endpoints (`server.js`)
+- Expose REST API endpoints under `/api/v1/txflow/*`:
+  * `POST /api/v1/txflow/faucet`: Request testnet USDC funds for the configured wallet.
+  * `GET /api/v1/txflow/status`: Fetch wallet address, agent key authorization status, perp & outcome balances, and open orders.
+  * `POST /api/v1/txflow/transfer`: Rebalance collateral between perp and outcome sub-accounts.
+  * `POST /api/v1/txflow/order`: Submit signed orders to the TxFlow CLOB matching engine.
+  * `POST /api/v1/txflow/cancel`: Cancel open orders by cloid or order ID.
+  * `GET /api/v1/txflow/markets`: Retrieve active prediction markets via `outcomeMeta`.
+
+### R5. Frontend Terminal Integration (`frontend/src/`)
+- Add an **Execution Sandbox Mode Switcher** to the Terminal header / controls:
+  * Allow toggle between `[Local Paper Simulation]` and `[TxFlow Testnet Live CLOB]`.
+- Provide a dedicated TxFlow Testnet Telemetry & Faucet widget in the UI:
+  * Display available Outcome test USDC balance and agent key authorization status.
+  * One-click "Claim Faucet" button to fund the testnet wallet.
+  * Visual badges indicating order execution status (Queued `traceId`, On-Chain Matched, Filled).
+
+### R6. Automated Test Suites & Monorepo Certification
+- Create a comprehensive test suite (`tests/test_txflow_client.js`) testing mock EIP-712 signing, MessagePack serialization, Faucet handling, and API routes.
+- Execute full regression verification with `npm run test:all` and `npm run build` certifying 100% pass rate.
+
+## Acceptance Criteria
+
+### Test Verification & Baseline Invariants
+- [ ] All 410 existing tests pass plus new TxFlow test suites pass with 100% pass rate (0 failures).
+- [ ] Frontend builds cleanly via `npm run build` without compilation or fatal errors.
+
+### Cryptographic & Execution Integrity
+- [ ] EIP-712 signing pipeline validates against TxFlow Testnet specification (low-S, exact MessagePack key order, Integer asset ID).
+- [ ] Agent authorization and outcome sub-account fund transfer routines are fully verified.
+
+### API & Frontend Integration
+- [ ] Backend provides functional `/api/v1/txflow/*` endpoints with proper error handling and fallback.
+- [ ] Frontend UI provides sandbox execution switcher and TxFlow testnet telemetry display.
+
+### Clean Repository Wrap-up
+- [ ] Working tree is clean and changes are committed following Conventional Commits standard.

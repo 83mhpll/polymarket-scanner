@@ -4,6 +4,7 @@ node_modules
 .DS_Store
 watchlist.json
 backtest.json
+txflow_orders.json
 sample_markets.json
 __pycache__/
 *.pyc
